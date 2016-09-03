@@ -1,9 +1,14 @@
 """
-Test the memory and cpu time consumption of signal/slot connections in PyQt5. Requires:
+Test the memory and cpu time consumption of signal/slot connections in PyQt5. Run this from a command 
+shell, have a coffee and see the results. 
+
+Dependencies:
+
 - PyQt 5.x (pip install pyqt5)
 - psutil (pip install psutil)
+- Python 3.4 or later (although easily adapted for 2.7+ versions: replace statistics.* and time.perf_counter)
 
-Run this from a command shell
+Tested only on Windows 7 but should work on any platform that supports standard CPython. 
 """
 
 import os
@@ -150,6 +155,3 @@ def compare_mem():
 
 compare_speed()
 compare_mem()
-
-example_output = """
-"""
