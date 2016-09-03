@@ -3,11 +3,11 @@ Various pieces of code for various tasks :)
 
 ## PyQt 5 signal/slot connections performance
 
-The PyQt5 website says that using `@pyqtSlot(...)` decreases the amount
+The PyQt5 website indicates that using `@pyqtSlot(...)` decreases the amount
 of memory required and the speed, although the site is not clear in what way. I wrote 
-.py to get specifics on this statement. 
+pyqt5_connections_mem_speed.py to get specifics on this statement. 
 
-The pyqt5 script found in this repository generates the following output on my Windows 7 x64 virtual machine, running on my laptop: 
+This generates the following output on my Windows 7 x64 virtual machine, running on my laptop: 
 
     Comparing speed for 1000 samples of 1000000 emits
     (Raw: expect approx 1460 sec more to complete)
@@ -72,13 +72,12 @@ and using
 when a signal connected to a `handler.slot()` is emitted. The script times how long 
 it takes to emit a million signals, and does this a 1000 times. 
 
-The result is not 
-conclusive: there may be a marginal gain of 0% in the above capture, and a separate 
-run showed 4%. Either way, in a typical application this would be completely irrelevant 
-and unnoticeable. 
+The result is not conclusive: the gain is 0% in the above capture, and a couple separate 
+run showed around 2-4%. Either way, in a typical application this speed difference would be 
+completely irrelevant and unnoticeable. 
 
-The next test compares the memory used by the connection, and the time required to 
-establish the connection -- no signal emission is involved. This shows that pyqtSlot'd 
+The next test compares the memory used by connections, and the time required to 
+establish connections -- no signal emission is involved. This shows that pyqtSlot'd 
 methods are about 6 times faster to *connect* to, than "raw" methods. This is significant,
 but would only matter in an application where *establishing* raw connections was a significant 
 portion of the total cpu time of the application, not a common occurrence IMO. 
@@ -88,16 +87,22 @@ if half the CPU time of an app is establishing raw connections (presumably becau
 number of objects are being created and destroyed that either emit or receive), then 
 switching to pyqtSlot'd methods could bring this down by 45% approximately. But in most
 GUI applications, establishing connections is likely to be sporadic, when dialog windows
-are opened, threads started, graphics scene objects created, lists populated. But these 
+are opened, threads started, graphics scene objects created, lists populated. These 
 operations involve, in my experience, much more than just establishing a few connections; 
 various functions must be called, classes instantiates etc. I doubt the speed effect 
-would be noticeble, but it is good to know how it could be affected. 
+would be noticeble, but it is good to know how it could be affected, and this information
+could certainly help focus profiling: if you see a reaction to a click take a long 
+time, take a quick look at the number of raw connections established as a result of the 
+click, compared to the rest of the code involved in reacting to the click. 
 
-In terms of memory, the test shows that connections to raw methods take somewhere between 
-10 and 80 more memory. The accuracy is rather low due presumably to platform-dependent 
-limitations of memory size computation. Even if we use a figure of 100 times more memory
-per raw connection than per pyqtslot'd connection (this could happen if a raw connection 
-requires 400 bytes of information, where's a pyqtSlot'd one requires only 4, say a 
-pointer to something), again this would only be relevant if your app's memory were
-occupied mostly by raw connections. Although not very likely, this is defintely getting 
-into the realm of "keep in the back of your mind". 
+In terms of memory, the test shows that establishing connections to raw methods take somewhere 
+between 10 and 80 more memory than to pyqtSlot'd methods. The accuracy is rather low due 
+presumably to platform-dependent limitations of memory size computation, although the numbers 
+are consistent across runs. It would be nice to have a more accurate measurement, but if we
+take those numbers at face value, 1000 pyqtSlot'd connections uses about 20k, vs 440k for the
+same number of raw connections. Since 1000 connections at any given time is again not very 
+likely, and 440k is really not worth worrying about on a desktop, most applications don't 
+need to care. It would certainly be important where memory is at a premium like (current) mobile 
+devices and embedded systems. I suppose a 1000 connections are possible in a GUI table view
+where each row of the table model is listening for changes from a data object. 
+
