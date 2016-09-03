@@ -52,8 +52,10 @@ This generates the following output on my Windows 7 x64 virtual machine, running
     Pyqt Slot   :    1000000        16945152         1.97
     Ratios      :                         50            6
     
-    
     Process finished with exit code 0
+
+
+### Signaling speed
 
 The first test compares the speed of signaling with and without the pyqtSlot decorator. 
 IOW, is there a difference in speed between using 
@@ -76,6 +78,8 @@ The result is not conclusive: the gain is 0% in the above capture, and a couple 
 run showed around 2-4%. Either way, in a typical application this speed difference would be 
 completely irrelevant and unnoticeable. 
 
+### Connection establishment speed
+
 The next test compares the memory used by connections, and the time required to 
 establish connections -- no signal emission is involved. This shows that pyqtSlot'd 
 methods are about 6 times faster to *connect* to, than "raw" methods. This is significant,
@@ -95,6 +99,8 @@ could certainly help focus profiling: if you see a reaction to a click take a lo
 time, take a quick look at the number of raw connections established as a result of the 
 click, compared to the rest of the code involved in reacting to the click. 
 
+### Connection memory
+
 In terms of memory, the test shows that establishing connections to raw methods take somewhere 
 between 10 and 80 more memory than to pyqtSlot'd methods. The accuracy is rather low due 
 presumably to platform-dependent limitations of memory size computation, although the numbers 
@@ -108,3 +114,47 @@ table view where each row of the table model is listening for changes from a dat
 
 Feedback on the above would be most appreciated, it is very easy to get performance analyses 
 wrong!
+
+### Wrapping slots
+
+Sometimes it is necessary to wrap a slot in a function that does extra stuff before and/or after
+the slot is called. For example, 
+say you want to wrap all your slots with a function that will catch any exception raised while
+the slot is called, log the error somewhere and continue gracefully (useful during 
+development!). You could achieve this by replacing this: 
+
+    class Handler(QObject):
+        @pyqtSlot()
+        def slot(self):
+            pass
+
+by this: 
+
+    def slot_wrapper(func):
+        def wrapped_slot():
+            ... do extra stuff...
+            func()
+    
+        pyqt_slot = pyqtSlot()(wrapped_slot)
+        assert pyqt_slot is wrapped_slot
+        return pyqt_slot
+
+    class Handler(QObject):
+        @slot_wrapper
+        def slot(self):
+            pass
+
+Given that the return value of `pyqtSlot()(wrapped_slot)` is `wrapped_slot`, and the latter is not a method 
+on a QObject but just a bare function, I wondered if the wrapped version would have the same memory and time
+performance as a raw slot. The script `pyqt5_connections_mem_speed.py` can test this by setting `USE_WRAPPED_SLOT`
+to True. The results don't change. According to the PyQt5 author Phil Thompson, the handler's meta object 
+is what provides the memory and speed improvements, and indeed inspecting the handler.metaObject() using the 
+Python debugger** reveals that `wrapped_slot` is in it (somehow!). So wrapping a pyqtSlot'd method still
+maintains the memory and speed advantages of unwrapped pyqtSlot'd methods.
+
+** Footnote: 
+
+    meta = handler.metaObject()
+    meta_methods = [str(meta.method(i).methodSignature())
+                    for i in range(meta.methodOffset(), meta.methodCount())]
+    print(meta_methods)
