@@ -103,6 +103,8 @@ take those numbers at face value, 1000 pyqtSlot'd connections uses about 20k, vs
 same number of raw connections. Since 1000 connections at any given time is again not very 
 likely, and 440k is really not worth worrying about on a desktop, most applications don't 
 need to care. It would certainly be important where memory is at a premium like (current) mobile 
-devices and embedded systems. I suppose a 1000 connections are possible in a GUI table view
-where each row of the table model is listening for changes from a data object. 
+devices and embedded systems. I suppose establishin a 1000+ connections is possible in a GUI 
+table view where each row of the table model is listening for changes from a data object. 
 
+Feedback on the above would be most appreciated, it is very easy to get performance analyses 
+wrong!
