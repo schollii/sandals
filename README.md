@@ -4,10 +4,10 @@ Various pieces of code for various tasks :)
 ## PyQt 5 signal/slot connections performance
 
 The PyQt5 website indicates that using `@pyqtSlot(...)` decreases the amount
-of memory required and the speed, although the site is not clear in what way. I wrote 
+of memory required and increases speed, although the site is not clear in what way. I wrote 
 pyqt5_connections_mem_speed.py to get specifics on this statement. 
 
-This generates the following output on my Windows 7 x64 virtual machine, running on my laptop: 
+This script generates the following output on my Windows 7 x64 virtual machine, running on my laptop: 
 
     Comparing speed for 1000 samples of 1000000 emits
     (Raw: expect approx 1460 sec more to complete)
@@ -54,11 +54,12 @@ This generates the following output on my Windows 7 x64 virtual machine, running
     
     Process finished with exit code 0
 
+The output is analysed in the following subsections. 
 
 ### Signaling speed
 
 The first test compares the speed of signaling with and without the pyqtSlot decorator. 
-IOW, is there a difference in speed between using 
+I.e., it checks whether there is a difference in speed between using 
 
    class Handler:
         def slot(self):
@@ -71,45 +72,45 @@ and using
         def slot(self):
             pass
 
-when a signal connected to a `handler.slot()` is emitted. The script times how long 
-it takes to emit a million signals, and does this a 1000 times. 
+when a signal connected to a `handler.slot` is emitted. The script times how long 
+it takes to emit a million signals, does this a 1000 times and averages. 
 
 The result is not conclusive: the gain is 0% in the above capture, and a couple separate 
 run showed around 2-4%. Either way, in a typical application this speed difference would be 
-completely irrelevant and unnoticeable. 
+completely unnoticeable. 
 
 ### Connection establishment speed
 
-The next test compares the memory used by connections, and the time required to 
-establish connections -- no signal emission is involved. This shows that pyqtSlot'd 
+The next test in the output compares the memory used by connections, and the time required to 
+establish connections -- no signal emission is involved. The time results show that pyqtSlot'd 
 methods are about 6 times faster to *connect* to, than "raw" methods. This is significant,
 but would only matter in an application where *establishing* raw connections was a significant 
-portion of the total cpu time of the application, not a common occurrence IMO. 
+portion of the total cpu time of the application. This is not a common occurrence IMO. 
 
 For example, 
-if half the CPU time of an app is establishing raw connections (presumably because a huge
+if half the CPU time of an app is spent establishing raw connections (presumably because a huge
 number of objects are being created and destroyed that either emit or receive), then 
-switching to pyqtSlot'd methods could bring this down by 45% approximately. But in most
-GUI applications, establishing connections is likely to be sporadic, when dialog windows
+switching to pyqtSlot'd methods could bring this down by about 45%. But in most
+GUI applications, establishing connections is likely to be sporadic: when dialog windows
 are opened, threads started, graphics scene objects created, lists populated. These 
 operations involve, in my experience, much more than just establishing a few connections; 
-various functions must be called, classes instantiates etc. I doubt the speed effect 
-would be noticeble, but it is good to know how it could be affected, and this information
-could certainly help focus profiling: if you see a reaction to a click take a long 
+various functions must be called, classes instantiated etc. I doubt the speed effect 
+would be noticeble, but it is good to know what could affect connect speed, and this information
+could certainly help focus profiling: if you see GUI reaction to a click take a long 
 time, take a quick look at the number of raw connections established as a result of the 
 click, compared to the rest of the code involved in reacting to the click. 
 
 ### Connection memory
 
-In terms of memory, the test shows that establishing connections to raw methods take somewhere 
-between 10 and 80 more memory than to pyqtSlot'd methods. The accuracy is rather low due 
-presumably to platform-dependent limitations of memory size computation, although the numbers 
+In terms of memory, the results show that establishing connections to raw methods take 
+10 to 100 times more memory than to pyqtSlot'd methods. The accuracy is rather low due 
+presumably to limitations of memory size computation funcions used, although the numbers 
 are consistent across runs. It would be nice to have a more accurate measurement, but if we
 take those numbers at face value, 1000 pyqtSlot'd connections uses about 20k, vs 440k for the
 same number of raw connections. Since 1000 connections at any given time is again not very 
-likely, and 440k is really not worth worrying about on a desktop, most applications don't 
+likely, and 440k is really not worth worrying about on a desktop, most applications probably don't 
 need to care. It would certainly be important where memory is at a premium like (current) mobile 
-devices and embedded systems. I suppose establishin a 1000+ connections is possible in a GUI 
+devices and embedded systems. I suppose establishing a 1000+ connections is possible in a GUI 
 table view where each row of the table model is listening for changes from a data object. 
 
 Feedback on the above would be most appreciated, it is very easy to get performance analyses 
@@ -121,7 +122,7 @@ Sometimes it is necessary to wrap a slot in a function that does extra stuff bef
 the slot is called. For example, 
 say you want to wrap all your slots with a function that will catch any exception raised while
 the slot is called, log the error somewhere and continue gracefully (useful during 
-development!). You could achieve this by replacing this: 
+development!). You could achieve this by replacing 
 
     class Handler(QObject):
         @pyqtSlot()
@@ -129,6 +130,13 @@ development!). You could achieve this by replacing this:
             pass
 
 by this: 
+
+    class Handler(QObject):
+        @slot_wrapper
+        def slot(self):
+            pass
+
+with `slot_wrapper` defined as 
 
     def slot_wrapper(func):
         def wrapped_slot():
@@ -139,20 +147,19 @@ by this:
         assert pyqt_slot is wrapped_slot
         return pyqt_slot
 
-    class Handler(QObject):
-        @slot_wrapper
-        def slot(self):
-            pass
-
 Given that the return value of `pyqtSlot()(wrapped_slot)` is `wrapped_slot`, and the latter is not a method 
-on a QObject but just a bare function, I wondered if the wrapped version would have the same memory and time
-performance as a raw slot. The script `pyqt5_connections_mem_speed.py` can test this by setting `USE_WRAPPED_SLOT`
-to True. The results don't change. According to the PyQt5 author Phil Thompson, the handler's meta object 
-is what provides the memory and speed improvements, and indeed inspecting the handler.metaObject() using the 
-Python debugger** reveals that `wrapped_slot` is in it (somehow!). So wrapping a pyqtSlot'd method still
-maintains the memory and speed advantages of unwrapped pyqtSlot'd methods.
+on a QObject but just a bare function (albeit a closure in the Python sense of the term), I wondered if 
+the wrapped version would have the same memory and time
+performance as a raw slot. According to the PyQt5 author Phil Thompson, the handler's meta object 
+is what provides the memory and speed improvements: the pyqtSlot()(func) puts stuff in func's QObject instance 
+meta-object, but does it work on a wrapper of a method? 
 
-** Footnote: 
+The script `pyqt5_connections_mem_speed.py` can test this by setting `USE_WRAPPED_SLOT`
+to True. Interestingly, the results don't change. Indeed inspecting the handler.metaObject() using the 
+Python debugger** reveals that `wrapped_slot` is in it (somehow!). So wrapping a pyqtSlot'd method still
+maintains the memory and speed advantages of unwrapped pyqtSlot'd methods, that's great news!
+
+** Footnote: checking meta-object for slots:
 
     meta = handler.metaObject()
     meta_methods = [str(meta.method(i).methodSignature())
