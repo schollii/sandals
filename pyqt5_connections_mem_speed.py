@@ -24,7 +24,7 @@ app = QCoreApplication([])
 NUM_SAMPLES = 1000
 NUM_EMITS_PER_SAMPLE = 1000000  # SLOW (30 minutes on my laptop`s virtual machine)
 # NUM_EMITS_PER_SAMPLE = 10000
-WRAP_SLOT = False
+WRAP_SLOT = True
 
 
 def slot_wrapper(func):
@@ -36,7 +36,23 @@ def slot_wrapper(func):
     return pyqt_slot
 
 
-def measure_speed(slot_type_raw: bool) -> float:
+def get_handler_class(slot_type_raw):
+    if slot_type_raw:
+        class Handler:
+            def slot(self):
+                pass
+
+    else:
+        class Handler(QObject):
+            def slot(self):
+                pass
+
+            slot = pyqtSlot()(slot) if WRAP_SLOT else slot_wrapper(slot)
+
+    return Handler
+
+
+def measure_emit(slot_type_raw: bool) -> float:
     class Emitter(QObject):
         sig_speed = pyqtSignal()
 
@@ -47,17 +63,7 @@ def measure_speed(slot_type_raw: bool) -> float:
             self.exec_time = perf_counter() - start
             app.exit()
 
-    if slot_type_raw:
-        class Handler:
-            def slot(self):
-                pass
-    else:
-        class Handler(QObject):
-            # @pyqtSlot()
-            def slot(self):
-                pass
-
-            wrapped_slot = slot_wrapper(slot)
+    Handler = get_handler_class(slot_type_raw)
 
     emitter = Emitter()
     handler = Handler()
@@ -71,17 +77,17 @@ def measure_speed(slot_type_raw: bool) -> float:
 def sample_speeds(slot_type_raw: bool) -> [float]:
     avg_times = []
     for i in range(NUM_SAMPLES):
-        sample_time = measure_speed(slot_type_raw=True)
+        sample_time = measure_emit(slot_type_raw=True)
         avg_times.append(sample_time)
         if i == 10:
-            expect_time = round(mean(avg_times) * NUM_SAMPLES)
+            expect_time = round(mean(avg_times) * (NUM_SAMPLES - i))
             print('({}: expect approx {} sec more to complete)'.format('Raw' if slot_type_raw else 'Pyqt Slot',
                                                                        expect_time))
 
     return avg_times
 
 
-def compare_speed():
+def compare_emit():
     print('Comparing speed for {} samples of {} emits'.format(NUM_SAMPLES, NUM_EMITS_PER_SAMPLE))
 
     avg_times_raw = sample_speeds(True)
@@ -108,50 +114,65 @@ def get_current_mem():
     return process.memory_full_info().uss
 
 
-def measure_mem(num_connections: int, slot_type_raw: bool):
+def measure_connect(num_connections: int, slot_type_raw: bool, with_qobject_create: bool=False):
     gc.collect()
 
     class Emitter(QObject):
         sig_speed = pyqtSignal()
 
-    if slot_type_raw:
-        class Handler:
-            def slot(self):
-                pass
+    emitter = Emitter()
+    Handler = get_handler_class(slot_type_raw)
+
+    if with_qobject_create:
+        gc.collect()
+        mem_start = get_current_mem()
+        time_start = perf_counter()
+
+        handlers = []
+        for i in range(num_connections):
+            handler = Handler()
+            handlers.append(handler)
+            emitter.sig_speed.connect(handler.slot)
+
+        time_used = perf_counter() - time_start
+        mem_used = get_current_mem() - mem_start
 
     else:
-        class Handler(QObject):
-            def slot(self):
-                pass
-            slot = pyqtSlot()(slot) if WRAP_SLOT else slot_wrapper(slot)
+        handlers = [Handler() for i in range(num_connections)]
+        assert handlers[0] is not handlers[1]
 
-    emitter = Emitter()
-    handlers = [Handler() for i in range(num_connections)]
-    assert handlers[0] is not handlers[1]
+        gc.collect()
+        mem_start = get_current_mem()
+        time_start = perf_counter()
 
-    gc.collect()
-    mem_start = get_current_mem()
-    time_start = perf_counter()
-    for handler in handlers:
-        emitter.sig_speed.connect(handler.slot)
-    time_used = perf_counter() - time_start
-    mem_used = get_current_mem() - mem_start
-    # assert mem_used != 0
+        for handler in handlers:
+            emitter.sig_speed.connect(handler.slot)
+
+        time_used = perf_counter() - time_start
+        mem_used = get_current_mem() - mem_start
+        # assert mem_used != 0
 
     return mem_used, time_used
 
 
-def compare_mem():
+def compare_connect(with_qobject_create: bool=False):
     MAX_POWER = 7
-    print('Comparing mem and time required to create N connections, N from 100 to {}\n'.format(pow(10, MAX_POWER)))
+    if with_qobject_create:
+        msg = 'Comparing mem and time required to create N objects each with 1 connection, {} times, N from 100 to {}\n'
+        print(msg.format(NUM_SAMPLES, pow(10, MAX_POWER)))
+    else:
+        msg = 'Comparing mem and time required to create N connections, {} times, N from 100 to {}\n'
+        print(msg.format(NUM_SAMPLES, pow(10, MAX_POWER)))
 
     for power in range(2, MAX_POWER):
         num_connections = pow(10, power)
         print('Measuring for {} connections'.format(num_connections))
         print('{:12}  {:10} {:>15} {:>12}'.format('', '# connects', 'mem (bytes)', 'time (sec)'))
 
-        mem_raw, time_raw = measure_mem(num_connections, slot_type_raw=True)
-        mem_pyqtslot, time_pyqtslot = measure_mem(num_connections, slot_type_raw=False)
+        mem_raw, time_raw = measure_connect(
+            num_connections, slot_type_raw=True, with_qobject_create=with_qobject_create)
+        mem_pyqtslot, time_pyqtslot = measure_connect(
+            num_connections, slot_type_raw=False, with_qobject_create=with_qobject_create)
 
         print('{:12}: {:10} {:15} {:12.3}'.format('Raw', num_connections, mem_raw, time_raw))
         print('{:12}: {:10} {:15} {:12.3}'.format('Pyqt Slot', num_connections, mem_pyqtslot, time_pyqtslot))
@@ -164,20 +185,25 @@ def compare_mem():
                                                       round(time_raw / time_pyqtslot)))
 
 
-def compare_mem_time_stats(num_connections):
-    print('Comparing mem and time required to create {} connections\n'.format(num_connections))
+def compare_connect_stats(num_connections, with_qobject_create: bool=False):
+    msg = 'Comparing mem and time required to create {} connections, {} times\n'
+    print(msg.format(num_connections, NUM_SAMPLES))
 
-    print('{:12}  {:15} {:>15} {:>15} {:>15} {:>15}'.format(
-        '', '# connects', 'avg mem (bytes)', 'uncert mem', 'avg time (sec)', 'uncert time'))
     raw_mems, raw_times = [], []
     pyqtslot_mems, pyqtslot_times = [], []
-    for i in range(1000):
-        mem_raw, time_raw = measure_mem(num_connections, slot_type_raw=True)
-        mem_pyqtslot, time_pyqtslot = measure_mem(num_connections, slot_type_raw=False)
+    for i in range(NUM_SAMPLES):
+        mem_raw, time_raw = measure_connect(
+            num_connections, slot_type_raw=True, with_qobject_create=with_qobject_create)
+        mem_pyqtslot, time_pyqtslot = measure_connect(
+            num_connections, slot_type_raw=False, with_qobject_create=with_qobject_create)
         raw_mems.append(mem_raw)
         raw_times.append(time_raw)
         pyqtslot_mems.append(mem_pyqtslot)
         pyqtslot_times.append(time_pyqtslot)
+
+        if i == 10:
+            expect_time = round((mean(raw_times) + mean(pyqtslot_times)) * (NUM_SAMPLES - i))
+            print('(expect approx {} sec more to complete)'.format(expect_time))
 
     def output_stats(label: str, mems, times):
         mean_mem = int(mean(mems))
@@ -190,17 +216,21 @@ def compare_mem_time_stats(num_connections):
 
         return mean_mem, mean_time
 
+    print('{:12}  {:15} {:>15} {:>15} {:>15} {:>15}'.format(
+        '', '# connects', 'avg mem (bytes)', 'uncert mem', 'avg time (sec)', 'uncert time'))
     mean_mem_raw, mean_time_raw = output_stats('Raw', raw_mems, raw_times)
     mean_mem_pyqt, mean_time_pyqt = output_stats('Pyqt Slot', pyqtslot_mems, pyqtslot_times)
     print('{:12}: {:15} {:15} {:15} {:15}\n'.format('Ratios',
                                                     '',
-                                                    round(mean_mem_raw / mean_mem_pyqt),
+                                                    round(mean_mem_raw / mean_mem_pyqt, 1),
                                                     '',
-                                                    round(mean_time_raw / mean_time_pyqt)))
+                                                    round(mean_time_raw / mean_time_pyqt, 1)))
 
 
-compare_speed()
-compare_mem()
-# compare_mem_time_stats(10)
-# compare_mem_time_stats(100)
-# compare_mem_time_stats(1000)
+compare_emit()
+compare_connect()
+# compare_connect(with_qobject_create=True)
+# compare_connect_stats(10)
+# compare_connect_stats(100)
+# compare_connect_stats(1000)
+# compare_connect_stats(10000, with_qobject_create=True)
