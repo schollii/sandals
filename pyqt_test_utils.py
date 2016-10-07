@@ -1,4 +1,4 @@
-# Use, distribution and modification of this file is bound by the terms of the BSD license. 
+# Use, distribution and modification of this file is bound by the terms of the MIT license. 
 
 """
 Various testing utilities for PyQt. 
@@ -11,6 +11,8 @@ __version__ = '0.9.0'
 __all__ = ['check_widget_snapshot']
 
 
+# Discussion of check_widget_snapshot() is at 
+# http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt
 def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str,
                           rms_tol_perc: float = 0.0, num_tol_perc: float=100.0) -> bool:
     """
