@@ -1,18 +1,20 @@
-# Use, distribution and modification of this file is bound by the terms of the MIT license. 
+# Use, distribution and modification of this file is bound by the terms of the MIT (expat) license. 
 
 """
 Various testing utilities for PyQt. 
 """
 
 __author__ = "Oliver Schoenborn"
-__license__ = "BSD"
+__license__ = "MIT"
 __version__ = '0.9.0'
 
 __all__ = ['check_widget_snapshot']
 
 
 # Discussion of check_widget_snapshot() is at 
-# http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt
+# http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt; 
+# although the code on that site is licensed under CPOL, the code in the current file is under 
+# MIT license. 
 def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str,
                           rms_tol_perc: float = 0.0, num_tol_perc: float=100.0) -> bool:
     """
