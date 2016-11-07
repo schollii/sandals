@@ -8,13 +8,106 @@ __author__ = "Oliver Schoenborn"
 __license__ = "MIT"
 __version__ = '0.9.0'
 
+from pathlib import Path
+from math import sqrt
+
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtGui import QImage, QPixmap, QColor
+
 __all__ = ['check_widget_snapshot']
 
 
-# Discussion of check_widget_snapshot() is at 
+class ImgDiffer:
+
+    def __init__(self, rms_tol_perc: float = 0.0, num_tol_perc: float = 0.0, max_pix_diff_tol: int = 0):
+        """
+        :param rms_tol_perc: percentage difference allowed between widget's snapshot and the reference, i.e.
+            a floating point value in range 0..100
+        :param num_tol_perc: the maximum percentage of mismatched pixels allowed, relative to total number
+            of pixels in the reference image; two pixels differ if any of their R, G, B and A values differ
+        """
+        self.rms_tol_perc = float(rms_tol_perc)  # ensure FPV so report can format
+        self.num_tol_perc = float(num_tol_perc)  # ensure FPV so report can format
+        self.max_pix_diff_tol = max_pix_diff_tol
+
+        self.diff_rms_perc = None
+        self.num_diffs_perc = None
+
+    def get_diff(self, image: QImage, ref_image: QImage) -> QImage:
+        diff_width = max(ref_image.width(), image.width())
+        diff_height = max(ref_image.height(), image.height())
+        diff_image = QImage(diff_width, diff_height, ref_image.format())
+
+        diff_rms = 0
+        num_diffs = 0
+        max_pix_diff = 0
+        total_num_pixels = 0
+        for i in range(diff_width):
+            for j in range(diff_height):
+                pixel = image.pixelColor(i, j)
+                ref_pixel = ref_image.pixelColor(i, j)
+                if pixel.isValid() and ref_pixel.isValid():
+                    total_num_pixels += 1
+                    if pixel == ref_pixel:
+                        diff_image.setPixelColor(i, j, self._get_pixel_diff_ref_color())
+                    else:
+                        num_diffs += 1
+                        diff_rms_pix, diff_color = self._get_pixel_diff(pixel, ref_pixel)
+                        diff_rms += diff_rms_pix
+                        max_diff = max(diff_color)
+                        if max_diff > max_pix_diff:
+                            max_pix_diff = max_diff
+                        diff_image.setPixelColor(i, j, QColor(*diff_color))
+
+                elif pixel.isValid():
+                    diff_image.setPixelColor(i, j, pixel)
+
+                elif ref_pixel.isValid():
+                    diff_image.setPixelColor(i, j, ref_pixel)
+
+                else:
+                    COLOR_NO_PIXEL = QColor(0, 0, 0)
+                    diff_image.setPixelColor(i, j, COLOR_NO_PIXEL)
+
+        if num_diffs == 0:
+            return None
+
+        diff_rms /= num_diffs
+        self.diff_rms_perc = diff_rms * 100
+        self.num_diffs_perc = (num_diffs / total_num_pixels) * 100
+
+        diff_acceptable = (self.diff_rms_perc <= self.rms_tol_perc and
+                           self.num_diffs_perc <= self.num_tol_perc and
+                           max_pix_diff <= self.max_pix_diff_tol)
+        return None if diff_acceptable else diff_image
+
+    def report(self) -> str:
+        return "RMS diff={:.2}% (rms_tol_perc={:.2}%), # pixels changed={:.2}% (num_tol_perc={:.2}%)".format(
+            self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc)
+
+    def _get_pixel_diff(self, pix_color: QColor, ref_pix_color: QColor) -> (int, int, int, int):
+        DIFF_MAX = 255
+        DIFF_REF_PIX = self._get_pixel_diff_ref()
+        pix_rgba = pix_color.getRgb()
+        ref_pix_rgba = ref_pix_color.getRgb()
+        diff = [pow((x - y) / DIFF_MAX, 2) for x, y in zip(pix_rgba, ref_pix_rgba)]
+        diff_rms = sqrt(sum(diff) / len(pix_rgba))
+        diff_color = [DIFF_REF_PIX - abs(x - y) for x, y in zip(pix_rgba, ref_pix_rgba)]
+        return diff_rms, diff_color
+
+    def _get_pixel_diff_ref_color(self) -> (int, int, int):
+        DIFF_REF_PIX = self._get_pixel_diff_ref()
+        return QColor(DIFF_REF_PIX, DIFF_REF_PIX, DIFF_REF_PIX)
+
+    def _get_pixel_diff_ref(self) -> int:
+        DIFF_REF_PIX = 255  # value corresponds to "no difference"
+        return DIFF_REF_PIX
+
+
+# Discussion of check_widget_snapshot() is at
 # http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt.
-def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str,
-                          rms_tol_perc: float = 0.0, num_tol_perc: float=100.0) -> bool:
+def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_old_results: bool = True,
+                          img_differ: ImgDiffer = None, log=None, **img_diff_kwargs) -> bool:
     """
     Get the difference between a widget's appearance and a file stored on disk. If the file doesn't
     exist, the file is created.
@@ -23,10 +116,10 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str,
         parent is used as folder -- useful for tests where __file__ can be passed)
     :param fig_name: the name of the reference image (will be saved in ref_path folder if it doesn't
         exist, or read if it does)
-    :param rms_tol_perc: percentage difference allowed between widget's snapshot and the reference, i.e.
-        a floating point value in range 0..100
-    :param num_tol_perc: the maximum percentage of mismatched pixels allowed, relative to total number
-        of pixels in the reference image; two pixels differ if any of their R, G, B and A values differ
+    :param delete_old_results: if True, any previous image results will be deleted (default); else keep them
+        even if the check passes (could be misleading)
+    :param img_differ: instance that adheres ot ImgDiffer protocol; default created if None
+
     :return: True if reference didn't exist (and was hence generated); True if widget matches reference;
         True if not matched but RMS diff is less than rms_tol_perc % and number of different pixels
         &lt; max_num_diffs; False otherwise
@@ -48,73 +141,63 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str,
     """
     actual_pixmap = widget.grab()
     image = actual_pixmap.toImage()
-    rms_tol_perc = float(rms_tol_perc)  # ensure FPV so logging can format
-    num_tol_perc = float(num_tol_perc)  # ensure FPV so logging can format
 
     ref_path = Path(ref_path)
     if ref_path.is_file():
         ref_path = ref_path.parent
     assert ref_path.is_dir()
     ref_pixmap_path = (ref_path / fig_name).with_suffix('.png')
+    actual_pix_path = ref_pixmap_path.with_name(fig_name + '_actual.png')
+    diff_pix_path = ref_pixmap_path.with_name(fig_name + '_diff.png')
+    assert actual_pix_path.parent == diff_pix_path.parent
+
+    # delete any old data:
+    if delete_old_results:
+        if actual_pix_path.exists():
+            actual_pix_path.unlink()
+        if diff_pix_path.exists():
+            diff_pix_path.unlink()
+
+    # if ref image doesn't exist, generate it and return:
     if not ref_pixmap_path.exists():
-        # ref doesn't exist, generate it:
-        log.info('Generating ref snapshot %s in %s for widget %s',
-                 ref_pixmap_path.name, ref_pixmap_path.parent, widget)
+        if log is not None:
+            log.info('Generating ref snapshot %s in %s for widget %s',
+                     ref_pixmap_path.name, ref_pixmap_path.parent, widget)
         actual_pixmap.save(str(ref_pixmap_path))
         return True
 
+    # it exists, so compare to it, return if identical:
     ref_pixmap = QPixmap(str(ref_pixmap_path))
     ref_image = ref_pixmap.toImage()
     if ref_image == image:
         return True
 
-    diff_image = QImage(ref_image.width(), ref_image.height(), ref_image.format())
-    DIFF_REF_PIX = 255  # value corresponds to "no difference"
-    DIFF_MAX = 255
-    REF_RGBA = [DIFF_REF_PIX] * 4
-    diff_rms = 0
-    num_diffs = 0
-    for i in range(ref_image.width()):
-        for j in range(ref_image.height()):
-            pixel = image.pixelColor(i, j).getRgb()
-            ref_pixel = ref_image.pixelColor(i, j).getRgb()
-            if pixel != ref_pixel:
-                diff = [pow((x - y) / DIFF_MAX, 2) for x, y in zip(pixel, ref_pixel)]
-                diff_rms += sqrt(sum(diff) / len(pixel))
-                diff = [DIFF_REF_PIX - abs(x - y) for x, y in zip(pixel, ref_pixel)]
-                diff_image.setPixelColor(i, j, QColor(*diff))
-                num_diffs += 1
-            else:
-                diff_image.setPixelColor(i, j, QColor(*REF_RGBA))
+    # not equal so get a diff image if diff is too large:
+    if img_differ is None:
+        img_differ = ImgDiffer(**img_diff_kwargs)
+    else:
+        if img_diff_kwargs:
+            msg = "Unknown kwargs {} (because img_differ was given rather than None)"
+            raise ValueError(msg.format(img_diff_kwargs))
 
-    total_num_pixels = ref_image.width() * ref_image.height()
-    diff_rms /= total_num_pixels
-    # use the following instead, for possibly improved representation of average difference over 
-    # differing pixels:
-    # diff_rms /= num_diffs 
-    diff_rms_perc = diff_rms * 100
-    num_diffs_perc = num_diffs * 100 / total_num_pixels
-    log.info("Widget %s vs ref %s in %s:",
-             widget.objectName() or repr(widget), ref_pixmap_path.name, ref_pixmap_path.parent)
-    log.info("    RMS diff=%s%% (rms_tol_perc=%s%%), # pixels changed=%s%% (num_tol_perc=%s%%)",
-             diff_rms_perc, rms_tol_perc, num_diffs_perc, num_tol_perc)
+    diff_image = img_differ.get_diff(image, ref_image)
+    if log is not None:
+        log.info("Widget %s vs ref %s in %s:",
+                 widget.objectName() or repr(widget), ref_pixmap_path.name, ref_pixmap_path.parent)
+        log.info(" " * 4 + img_differ.report())
 
-    if diff_rms_perc &lt;= rms_tol_perc and num_diffs_perc &lt;= num_tol_perc:
+    if diff_image is None:
         return True
 
-    # save the data
+    # save the actual and diff image
+    if log is not None:
+        log.warn("    Snapshot has changed beyond tolerances, saving actual and diff images to folder %s:",
+                 actual_pix_path.parent)
+        log.warn("    Saving actual image to %s", actual_pix_path.name)
+        log.warn("    Saving diff image (White - |ref - widget|) to %s", diff_pix_path.name)
 
-    actual_pix_path = ref_pixmap_path.with_name(fig_name + '_actual.png')
-    log.warn("    Snapshot has changed beyond tolerances, saving actual and diff images to folder %s:",
-             actual_pix_path.parent)
     actual_pixmap.save(str(actual_pix_path))
-
-    diff_pix_path = ref_pixmap_path.with_name(fig_name + '_diff.png')
-    assert actual_pix_path.parent == diff_pix_path.parent
     diff_pixmap = QPixmap(diff_image)
     diff_pixmap.save(str(diff_pix_path))
-
-    log.warn("    Actual image saved to %s", actual_pix_path.name)
-    log.warn("    White - |ref - widget| image saved to %s", diff_pix_path.name)
 
     return False
