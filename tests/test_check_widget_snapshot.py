@@ -3,8 +3,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch, call
 
 from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QColor
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel
+from math import sqrt, isclose
 
 import pyqt_test_utils
 from pyqt_test_utils import check_widget_snapshot, ImgDiffer
@@ -206,12 +208,13 @@ class TestCaseChecker:
 
 class TestCaseImgDiffer:
 
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.app = QApplication.instance()
         if self.app is None:
             self.app = QApplication([])
 
-    def test_same(self):
+    def test_same_img(self):
         widget1 = QLabel('test1')
         widget2 = QLabel('test1')
         ref_img = widget1.grab().toImage()
@@ -219,56 +222,155 @@ class TestCaseImgDiffer:
         assert img == ref_img
 
         differ = ImgDiffer()
-        differ.get_diff(img, ref_img)
+        assert differ.get_diff(img, ref_img) is None
+        assert differ.report() == "RMS diff=0.00% (rms_tol_perc=0.00%), number of pixels changed=0.00% (num_tol_perc=None)"
 
-    def test_same_size(self):
-        widget1 = QLabel('test1')
-        widget2 = QLabel('test2')
+    def test_actual_wider(self):
+        widget_ref = QLabel('test1')
+        widget_actual = QLabel('test23456')
 
         def test():
-            widget2.show()
-            widget1.setFixedSize(widget2.width(), widget2.height())
+            widget_ref.show()
+            widget_actual.show()
+
+            ref_img = widget_ref.grab().toImage()
+            img = widget_actual.grab().toImage()
+            assert img != ref_img
+            assert img.width() > ref_img.width()
+            assert img.height() == ref_img.height()
+
+            differ = ImgDiffer()
+            diff = differ.get_diff(img, ref_img)
+            # diff.save('actual_wider_diff.png')
+            expect = QPixmap('actual_wider_diff.png')
+            assert expect.toImage() == diff
+
+            self.app.closeAllWindows()
+
+        QTimer.singleShot(0, test)
+        self.app.exec()
+
+    def test_actual_higher(self):
+        widget1 = QLabel('test1')
+        widget2 = QLabel('test1\n123')
+
+        def test():
             widget1.show()
+            widget2.show()
 
             ref_img = widget1.grab().toImage()
             img = widget2.grab().toImage()
+            assert img != ref_img
+            assert img.width() == ref_img.width()
+            assert img.height() != ref_img.height()
+
+            differ = ImgDiffer()
+            diff = differ.get_diff(img, ref_img)
+            # diff.save('actual_higher_diff.png')
+            expect = QPixmap('actual_higher_diff.png')
+            assert expect.toImage() == diff
+
+            self.app.closeAllWindows()
+
+        QTimer.singleShot(0, test)
+        self.app.exec()
+
+    def test_same_size_img_not_eq(self):
+        widget_ref = QLabel('test1')
+        widget_actual = QLabel('test2')
+
+        def test():
+            widget_actual.show()
+            widget_ref.setFixedSize(widget_actual.width(), widget_actual.height())
+            widget_ref.show()
+
+            ref_img = widget_ref.grab().toImage()
+            img = widget_actual.grab().toImage()
             assert img != ref_img
             assert img.size() == ref_img.size()
 
             differ = ImgDiffer()
             diff = differ.get_diff(img, ref_img)
-            expect = QPixmap('same_size.png')
+            # diff.save('same_size_img_neq.png')
+            expect = QPixmap('same_size_img_neq.png')
             assert expect.toImage() == diff
+            report = differ.report()
+            assert report == "RMS diff=37.22% (rms_tol_perc=0.00%), number of pixels changed=10.46% (num_tol_perc=None)"
 
             self.app.closeAllWindows()
 
         QTimer.singleShot(0, test)
         self.app.exec()
 
-    def test_wider(self):
-        widget1 = QLabel('test1')
-        widget2 = QLabel('test23456')
+    def create_same_size_images(self, width: int, height: int, color: QColor) -> (QImage, QImage, QImage):
+        IMG_FORMAT = QImage.Format_ARGB32
 
-        def test():
-            widget1.show()
-            widget2.show()
+        # create ref
+        ref_img = QImage(width, height, IMG_FORMAT)
+        for i in range(ref_img.width()):
+            for j in range(ref_img.height()):
+                ref_img.setPixelColor(i, j, color)
 
-            ref_img = widget1.grab().toImage()
-            img = widget2.grab().toImage()
-            assert img != ref_img
-            assert img.width() != ref_img.width()
-            assert img.height() == ref_img.height()
+        # create actual = ref:
+        actual_img = ref_img.copy()
+        assert actual_img is not ref_img
+        assert actual_img == ref_img
 
-            differ = ImgDiffer()
-            diff = differ.get_diff(img, ref_img)
-            # QPixmap(ref_img).save('wider_ref.png')
-            # QPixmap(img).save('wider_actual.png')
-            # QPixmap(diff).save('wider_diff.png')
-            expect = QPixmap('wider_diff.png')
-            assert expect.toImage() == diff
+        # create blank diff
+        diff_img = QImage(width, height, IMG_FORMAT)
+        for i in range(diff_img.width()):
+            for j in range(diff_img.height()):
+                diff_img.setPixelColor(i, j, QColor('black'))
 
-            self.app.closeAllWindows()
+        return ref_img, actual_img, diff_img
 
-        QTimer.singleShot(0, test)
-        self.app.exec()
+    def test_same_size_one_pixel_diff(self):
+        ref_img, actual_img, expect_diff_img = self.create_same_size_images(101, 102, QColor(103, 104, 105, 106))
+        actual_img.setPixelColor(50, 50, QColor(0, 0, 0, 0))
+        expect_diff_img.setPixelColor(50, 50, QColor(103, 104, 105, 106))
 
+        differ = ImgDiffer()
+        diff_img = differ.get_diff(actual_img, ref_img)
+        assert expect_diff_img == diff_img
+        assert differ.num_diffs_perc == 1/(101*102)*100
+        assert differ.max_pix_diff == 106
+        assert differ.diff_rms_perc == 100 * sqrt(pow(103, 2) + pow(104, 2) + pow(105, 2) + pow(106, 2)) / 2 / 255
+        report = differ.report()
+        assert report == "RMS diff=40.98% (rms_tol_perc=0.00%), number of pixels changed=0.01% (num_tol_perc=None)"
+
+        # various cases that should produce no diff:
+        assert ImgDiffer(rms_tol_perc=42).get_diff(actual_img, ref_img) is None
+        assert ImgDiffer(num_tol_perc=0.01).get_diff(actual_img, ref_img) is None
+        assert ImgDiffer(max_pix_diff_tol=110).get_diff(actual_img, ref_img) is None
+        assert ImgDiffer(rms_tol_perc=42, num_tol_perc=0.01, max_pix_diff_tol=110).get_diff(actual_img, ref_img) is None
+
+        # various cases that should produce same diff:
+        assert ImgDiffer(rms_tol_perc=40).get_diff(actual_img, ref_img) == expect_diff_img
+        assert ImgDiffer(num_tol_perc=0.001).get_diff(actual_img, ref_img) == expect_diff_img
+        assert ImgDiffer(max_pix_diff_tol=100).get_diff(actual_img, ref_img) == expect_diff_img
+
+    def test_same_size_all_pixel_diff(self):
+        ref_img, actual_img, expect_diff_img = self.create_same_size_images(101, 102, QColor(103, 104, 105, 106))
+        for i in range(ref_img.width()):
+            for j in range(ref_img.height()):
+                pixel_color = ref_img.pixelColor(i, j)
+                actual_img.setPixelColor(i, j, QColor(*[c+2 for c in pixel_color.getRgb()]))
+                expect_diff_img.setPixelColor(i, j, QColor(2, 2, 2, 2))
+
+        differ = ImgDiffer()
+        diff_img = differ.get_diff(actual_img, ref_img)
+        assert expect_diff_img == diff_img
+        assert differ.num_diffs_perc == 100
+        assert differ.max_pix_diff == 2
+        assert isclose(differ.diff_rms_perc, 100 * 2 / 255)
+        report = differ.report()
+        assert report == "RMS diff=0.78% (rms_tol_perc=0.00%), number of pixels changed=100.00% (num_tol_perc=None)"
+
+        # various cases that should produce no diff:
+        assert ImgDiffer(rms_tol_perc=1).get_diff(actual_img, ref_img) is None
+        assert ImgDiffer(max_pix_diff_tol=2).get_diff(actual_img, ref_img) is None
+        assert ImgDiffer(rms_tol_perc=1, max_pix_diff_tol=2).get_diff(actual_img, ref_img) is None
+
+        # various cases that should produce same diff:
+        assert ImgDiffer(rms_tol_perc=1/3).get_diff(actual_img, ref_img) == expect_diff_img
+        assert ImgDiffer(max_pix_diff_tol=1).get_diff(actual_img, ref_img) == expect_diff_img

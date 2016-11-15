@@ -19,28 +19,36 @@ __all__ = ['check_widget_snapshot']
 
 class ImgDiffer:
 
-    def __init__(self, rms_tol_perc: float = 0.0, num_tol_perc: float = 0.0, max_pix_diff_tol: int = 0):
+    def __init__(self, rms_tol_perc: float = None, num_tol_perc: float = None, max_pix_diff_tol: int = None):
         """
         :param rms_tol_perc: percentage difference allowed between widget's snapshot and the reference, i.e.
             a floating point value in range 0..100
         :param num_tol_perc: the maximum percentage of mismatched pixels allowed, relative to total number
             of pixels in the reference image; two pixels differ if any of their R, G, B and A values differ
+        :param max_pix_diff_tol: maximum difference allowed in any pixel
+
+        At least one of the three must be non-None. If all 3 are None, rms_tol_perc will be set to zero,
+        implying strict equality only (no differences allowed).
         """
-        self.rms_tol_perc = float(rms_tol_perc)  # ensure FPV so report can format
-        self.num_tol_perc = float(num_tol_perc)  # ensure FPV so report can format
+        if rms_tol_perc is None and num_tol_perc is None and max_pix_diff_tol is None:
+            rms_tol_perc = 0.0
+        self.rms_tol_perc = None if rms_tol_perc is None else float(rms_tol_perc)  # ensure FPV so report can format
+        self.num_tol_perc = None if num_tol_perc is None else float(num_tol_perc)  # ensure FPV so report can format
         self.max_pix_diff_tol = max_pix_diff_tol
 
         self.diff_rms_perc = None
         self.num_diffs_perc = None
+        self.max_pix_diff = None
 
     def get_diff(self, image: QImage, ref_image: QImage) -> QImage:
         diff_width = max(ref_image.width(), image.width())
         diff_height = max(ref_image.height(), image.height())
         diff_image = QImage(diff_width, diff_height, ref_image.format())
 
+        COLOR_NO_PIXEL = QColor('white')
         diff_rms = 0
         num_diffs = 0
-        max_pix_diff = 0
+        self.max_pix_diff = 0
         total_num_pixels = 0
         for i in range(diff_width):
             for j in range(diff_height):
@@ -55,8 +63,8 @@ class ImgDiffer:
                         diff_rms_pix, diff_color = self._get_pixel_diff(pixel, ref_pixel)
                         diff_rms += diff_rms_pix
                         max_diff = max(diff_color)
-                        if max_diff > max_pix_diff:
-                            max_pix_diff = max_diff
+                        if max_diff > self.max_pix_diff:
+                            self.max_pix_diff = max_diff
                         diff_image.setPixelColor(i, j, QColor(*diff_color))
 
                 elif pixel.isValid():
@@ -66,41 +74,50 @@ class ImgDiffer:
                     diff_image.setPixelColor(i, j, ref_pixel)
 
                 else:
-                    COLOR_NO_PIXEL = QColor(0, 0, 0)
                     diff_image.setPixelColor(i, j, COLOR_NO_PIXEL)
 
-        if num_diffs == 0:
-            return None
-
-        diff_rms /= num_diffs
-        self.diff_rms_perc = diff_rms * 100
         self.num_diffs_perc = (num_diffs / total_num_pixels) * 100
+        if num_diffs == 0:
+            self.diff_rms_perc = 0.0
+            if ref_image.width() == image.width() and ref_image.height() == image.height():
+                return None
+            return diff_image
 
-        diff_acceptable = (self.diff_rms_perc <= self.rms_tol_perc and
-                           self.num_diffs_perc <= self.num_tol_perc and
-                           max_pix_diff <= self.max_pix_diff_tol)
-        return None if diff_acceptable else diff_image
+        else:
+            diff_rms /= num_diffs
+            self.diff_rms_perc = diff_rms * 100
+
+            rms_ok = (self.rms_tol_perc is None or self.diff_rms_perc <= self.rms_tol_perc)
+            num_diff_ok = (self.num_tol_perc is None or self.num_diffs_perc <= self.num_tol_perc)
+            max_pix_diff_ok = (self.max_pix_diff_tol is None or self.max_pix_diff <= self.max_pix_diff_tol)
+            diff_acceptable = (rms_ok and num_diff_ok and max_pix_diff_ok)
+            return None if diff_acceptable else diff_image
 
     def report(self) -> str:
-        return "RMS diff={:.2}% (rms_tol_perc={:.2}%), # pixels changed={:.2}% (num_tol_perc={:.2}%)".format(
-            self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc)
+        msg = "RMS diff={} (rms_tol_perc={}), number of pixels changed={} (num_tol_perc={})"
+        results = (self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc)
+        msg = msg.format(*['{}' if obj is None else '{:.2f}%' for obj in results])
+        return msg.format(*results)
 
     def _get_pixel_diff(self, pix_color: QColor, ref_pix_color: QColor) -> (int, int, int, int):
         DIFF_MAX = 255
-        DIFF_REF_PIX = self._get_pixel_diff_ref()
         pix_rgba = pix_color.getRgb()
         ref_pix_rgba = ref_pix_color.getRgb()
+
         diff = [pow((x - y) / DIFF_MAX, 2) for x, y in zip(pix_rgba, ref_pix_rgba)]
         diff_rms = sqrt(sum(diff) / len(pix_rgba))
-        diff_color = [DIFF_REF_PIX - abs(x - y) for x, y in zip(pix_rgba, ref_pix_rgba)]
+
+        DIFF_REF_PIX = self._get_pixel_diff_ref()
+        diff_color = [abs(x - y) for x, y in zip(pix_rgba, ref_pix_rgba)]
+
         return diff_rms, diff_color
 
-    def _get_pixel_diff_ref_color(self) -> (int, int, int):
+    def _get_pixel_diff_ref_color(self) -> QColor:
         DIFF_REF_PIX = self._get_pixel_diff_ref()
         return QColor(DIFF_REF_PIX, DIFF_REF_PIX, DIFF_REF_PIX)
 
     def _get_pixel_diff_ref(self) -> int:
-        DIFF_REF_PIX = 255  # value corresponds to "no difference"
+        DIFF_REF_PIX = 0  # value corresponds to "no difference"
         return DIFF_REF_PIX
 
 
