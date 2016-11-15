@@ -8,3 +8,8 @@ of memory required and increases speed, although the site is not clear in what w
 pyqt5_connections_mem_speed.py to get specifics on this statement. 
 
 Results are discussed in a [CodeProject article](http://www.codeproject.com/Articles/1123088/PyQt-signal-slot-connection-performance)
+
+## PyQt Widget snapshot checker
+
+Utility components to check whether a widget looks identical or similar within tolerance to an existing snapshot of it. 
+Discussed in [CodeProject article](http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt).
