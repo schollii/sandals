@@ -189,7 +189,7 @@ class TestCaseChecker:
 
         # first check that kwargs when custom differ given causes exception:
         img_differ = Mock()
-        img_differ.get_diff.return_value=None
+        img_differ.get_diff.return_value = None
         pytest.raises(ValueError,
                       check_widget_snapshot, widget, __file__, 'test_custom_differ',
                       img_differ=img_differ, kwarg1=1, kwarg2=2)
@@ -198,7 +198,7 @@ class TestCaseChecker:
         assert img_differ.get_diff.call_count == 1
 
         img_differ_class = Mock()
-        img_differ_class.return_value.get_diff.return_value=None
+        img_differ_class.return_value.get_diff.return_value = None
         with patch.object(pyqt_test_utils, 'ImgDiffer', img_differ_class) as mock_default_differ:
             assert check_widget_snapshot(widget, __file__, 'test_custom_differ')
             assert mock_default_differ.call_args_list == [call()]
@@ -207,7 +207,6 @@ class TestCaseChecker:
 
 
 class TestCaseImgDiffer:
-
     @pytest.fixture(autouse=True)
     def setup_class(self):
         self.app = QApplication.instance()
@@ -223,7 +222,8 @@ class TestCaseImgDiffer:
 
         differ = ImgDiffer()
         assert differ.get_diff(img, ref_img) is None
-        assert differ.report() == "RMS diff=0.00% (rms_tol_perc=0.00%), number of pixels changed=0.00% (num_tol_perc=None)"
+        assert differ.report() == "RMS diff=0.00% (rms_tol_perc=0.00%), number of pixels changed=0.00% (" \
+                                  "num_tol_perc=None)"
 
     def test_actual_wider(self):
         widget_ref = QLabel('test1')
@@ -251,18 +251,18 @@ class TestCaseImgDiffer:
         self.app.exec()
 
     def test_actual_higher(self):
-        widget1 = QLabel('test1')
-        widget2 = QLabel('test1\n123')
+        widget_ref = QLabel('test1')
+        widget_actual = QLabel('test1\n123')
 
         def test():
-            widget1.show()
-            widget2.show()
+            widget_ref.show()
+            widget_actual.show()
 
-            ref_img = widget1.grab().toImage()
-            img = widget2.grab().toImage()
+            ref_img = widget_ref.grab().toImage()
+            img = widget_actual.grab().toImage()
             assert img != ref_img
             assert img.width() == ref_img.width()
-            assert img.height() != ref_img.height()
+            assert img.height() > ref_img.height()
 
             differ = ImgDiffer()
             diff = differ.get_diff(img, ref_img)
@@ -274,6 +274,32 @@ class TestCaseImgDiffer:
 
         QTimer.singleShot(0, test)
         self.app.exec()
+
+    def test_actual_higher_thinner(self):
+        widget_ref = QLabel('test1')
+        widget_actual = QLabel('tes\n123')
+
+        def test():
+            widget_ref.show()
+            widget_actual.show()
+
+            ref_img = widget_ref.grab().toImage()
+            img = widget_actual.grab().toImage()
+            assert img != ref_img
+            assert img.width() < ref_img.width()
+            assert img.height() > ref_img.height()
+
+            differ = ImgDiffer()
+            diff = differ.get_diff(img, ref_img)
+            # diff.save('actual_higher_thinner_diff.png')
+            expect = QPixmap('actual_higher_thinner_diff.png')
+            assert expect.toImage() == diff
+
+            self.app.closeAllWindows()
+
+        QTimer.singleShot(0, test)
+        self.app.exec()
+
 
     def test_same_size_img_not_eq(self):
         widget_ref = QLabel('test1')
@@ -302,6 +328,7 @@ class TestCaseImgDiffer:
         QTimer.singleShot(0, test)
         self.app.exec()
 
+
     def create_same_size_images(self, width: int, height: int, color: QColor) -> (QImage, QImage, QImage):
         IMG_FORMAT = QImage.Format_ARGB32
 
@@ -324,6 +351,7 @@ class TestCaseImgDiffer:
 
         return ref_img, actual_img, diff_img
 
+
     def test_same_size_one_pixel_diff(self):
         ref_img, actual_img, expect_diff_img = self.create_same_size_images(101, 102, QColor(103, 104, 105, 106))
         actual_img.setPixelColor(50, 50, QColor(0, 0, 0, 0))
@@ -332,7 +360,7 @@ class TestCaseImgDiffer:
         differ = ImgDiffer()
         diff_img = differ.get_diff(actual_img, ref_img)
         assert expect_diff_img == diff_img
-        assert differ.num_diffs_perc == 1/(101*102)*100
+        assert differ.num_diffs_perc == 1 / (101 * 102) * 100
         assert differ.max_pix_diff == 106
         assert differ.diff_rms_perc == 100 * sqrt(pow(103, 2) + pow(104, 2) + pow(105, 2) + pow(106, 2)) / 2 / 255
         report = differ.report()
@@ -349,12 +377,13 @@ class TestCaseImgDiffer:
         assert ImgDiffer(num_tol_perc=0.001).get_diff(actual_img, ref_img) == expect_diff_img
         assert ImgDiffer(max_pix_diff_tol=100).get_diff(actual_img, ref_img) == expect_diff_img
 
+
     def test_same_size_all_pixel_diff(self):
         ref_img, actual_img, expect_diff_img = self.create_same_size_images(101, 102, QColor(103, 104, 105, 106))
         for i in range(ref_img.width()):
             for j in range(ref_img.height()):
                 pixel_color = ref_img.pixelColor(i, j)
-                actual_img.setPixelColor(i, j, QColor(*[c+2 for c in pixel_color.getRgb()]))
+                actual_img.setPixelColor(i, j, QColor(*[c + 2 for c in pixel_color.getRgb()]))
                 expect_diff_img.setPixelColor(i, j, QColor(2, 2, 2, 2))
 
         differ = ImgDiffer()
@@ -372,5 +401,5 @@ class TestCaseImgDiffer:
         assert ImgDiffer(rms_tol_perc=1, max_pix_diff_tol=2).get_diff(actual_img, ref_img) is None
 
         # various cases that should produce same diff:
-        assert ImgDiffer(rms_tol_perc=1/3).get_diff(actual_img, ref_img) == expect_diff_img
+        assert ImgDiffer(rms_tol_perc=1 / 3).get_diff(actual_img, ref_img) == expect_diff_img
         assert ImgDiffer(max_pix_diff_tol=1).get_diff(actual_img, ref_img) == expect_diff_img

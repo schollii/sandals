@@ -14,7 +14,7 @@ from math import sqrt
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QImage, QPixmap, QColor
 
-__all__ = ['check_widget_snapshot']
+__all__ = ['check_widget_snapshot', 'ImgDiffer']
 
 
 class ImgDiffer:
