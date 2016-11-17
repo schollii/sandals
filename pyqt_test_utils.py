@@ -4,10 +4,6 @@
 Various testing utilities for PyQt. 
 """
 
-__author__ = "Oliver Schoenborn"
-__license__ = "MIT"
-__version__ = '0.9.0'
-
 from pathlib import Path
 from math import sqrt
 from time import perf_counter
@@ -16,6 +12,10 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QImage, QPixmap, QColor
 
 __all__ = ['check_widget_snapshot', 'ImgDiffer']
+
+__author__ = "Oliver Schoenborn"
+__license__ = "MIT"
+__version__ = '0.9.0'
 
 
 class ImgDiffer:
