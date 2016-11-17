@@ -194,7 +194,7 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
     :param img_differ: instance that adheres ot ImgDiffer protocol; default created if None
     :param log: a logging.Logger instance 
     :param try_sec: If this is None, only one comparison is made between the widgets. Otherwise, the 
-        comparison is made repeatedly every try_interval seconds, until try_sec have elapsed. 
+        comparison is made repeatedly every try_interval seconds, until at least try_sec seconds have elapsed. 
     :param try_interval: seconds to wait between tries. Must be < try_sec. 
 
     :return: True if reference didn't exist (and was hence generated); True if widget matches reference;
