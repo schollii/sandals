@@ -6,7 +6,7 @@ Various testing utilities for PyQt.
 
 from pathlib import Path
 from math import sqrt
-from time import perf_counter
+from time import perf_counter, sleep
 
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QImage, QPixmap, QColor
@@ -178,7 +178,7 @@ class ImgDiffer:
 # Discussion of check_widget_snapshot() is at
 # http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt.
 def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_old_results: bool = True,
-                          img_differ: ImgDiffer = None, log=None, try_sec: float=None, tries_freq: float=None, 
+                          img_differ: ImgDiffer = None, log=None, try_sec: float=None, try_interval: float=0.01, 
                           **img_diff_kwargs) -> bool:
     """
     Get the difference between a widget's appearance and a file stored on disk. If the file doesn't
@@ -257,16 +257,17 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
             msg = "Unknown kwargs {} (because img_differ was given rather than None)"
             raise ValueError(msg.format(img_diff_kwargs))
 
-    if try_sec is None:
-        diff_image = img_differ.get_diff(image, ref_image)        
-    else:
-        start_time = perf_counter()
-        while perf_counter() - start_time < try_sec:
+    start_time = perf_counter()
+    diff_image = img_differ.get_diff(image, ref_image)        
+    if try_sec is not None and diff_image is not None:
+        while diff_image is not None and perf_counter() - start_time < try_sec:
+            sleep(try_interval)
             diff_image = img_differ.get_diff(image, ref_image)
+    time_required = perf_counter() - start_time
 
     if log is None:
-        log.info("Widget %s vs ref %s in %s:",
-                 widget.objectName() or repr(widget), ref_pixmap_path.name, ref_pixmap_path.parent)
+        log.info("Widget %s vs ref %s in %s (%.2fs sec):",
+                 widget.objectName() or repr(widget), ref_pixmap_path.name, ref_pixmap_path.parent, time_required)
         log.info(" " * 4 + img_differ.report())
             
     if diff_img is None:
