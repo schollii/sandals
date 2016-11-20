@@ -8,7 +8,7 @@ from pathlib import Path
 from math import sqrt
 from time import perf_counter, sleep
 
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, qApp
 from PyQt5.QtGui import QImage, QPixmap, QColor
 
 __all__ = ['check_widget_snapshot', 'ImgDiffer']
@@ -162,7 +162,6 @@ class ImgDiffer:
         differences across all 4 channels of the colors (RGBA); second item is the absolute 
         difference between the pixel channels. 
         """
-        of the pixels
         DIFF_MAX = 255
         pix_rgba = pix_color.getRgb()
         ref_pix_rgba = ref_pix_color.getRgb()
@@ -215,9 +214,6 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
     thus causing the test to fail. Otherwise (no differences, or differences within stated bounds), 
     check_widget_snapshot() will just return True and the test will pass.
     """
-    actual_pixmap = widget.grab()
-    image = actual_pixmap.toImage()
-
     ref_path = Path(ref_path)
     if ref_path.is_file():
         ref_path = ref_path.parent
@@ -245,6 +241,8 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
 
     # it exists, so compare to it, return if identical:
     ref_pixmap = QPixmap(str(ref_pixmap_path))
+    actual_pixmap = widget.grab()
+    image = actual_pixmap.toImage()
     ref_image = ref_pixmap.toImage()
     if ref_image == image:
         return True
@@ -261,16 +259,19 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
     diff_image = img_differ.get_diff(image, ref_image)        
     if try_sec is not None and diff_image is not None:
         while diff_image is not None and perf_counter() - start_time < try_sec:
+            qApp.processEvents()
             sleep(try_interval)
+            actual_pixmap = widget.grab()
+            image = actual_pixmap.toImage()
             diff_image = img_differ.get_diff(image, ref_image)
     time_required = perf_counter() - start_time
 
-    if log is None:
-        log.info("Widget %s vs ref %s in %s (%.2fs sec):",
+    if log is not None:
+        log.info("Widget %s vs ref %s in %s (%.2f sec):",
                  widget.objectName() or repr(widget), ref_pixmap_path.name, ref_pixmap_path.parent, time_required)
         log.info(" " * 4 + img_differ.report())
             
-    if diff_img is None:
+    if diff_image is None:
         return True
             
     # save the actual and diff image
