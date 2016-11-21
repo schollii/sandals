@@ -10,6 +10,7 @@ import sys
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QColor, QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel
+from PyQt5.QtWidgets import QHBoxLayout
 
 import pyqt_test_utils  # for patching
 from pyqt_test_utils import check_widget_snapshot, ImgDiffer
@@ -316,25 +317,42 @@ class TestCaseChecker:
         QTimer.singleShot(1100, qt_app.quit)
 
         qt_app.exec()
+        ref_image_path.unlink()
 
-    def test_slow_widget_ok(self, qt_app):
+    def test_slow_widget_ok(self, qt_app, mocker):
         ref_image_path = non_existent_path('test_slow_widget_ok.png')
+
         widget_ref = QLabel('test123')
+        widget_ref.setLayout(QHBoxLayout())
 
         widget_actual = QLabel('test')
-        assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_ok')
+        widget_actual.setLayout(QHBoxLayout())
+
+        def show():
+            widget_ref.show()
+            widget_actual.show()
+
+        def create_ref():
+            widget_ref.grab().save('slow_widget_ref.png')
+            assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_ok')
 
         def check_ok_before_elapse():
-            assert check_widget_snapshot(widget_actual, __file__, 'test_slow_widget_ok', try_sec=2)
+            mock_sleep = mocker.patch.object(pyqt_test_utils, 'sleep')
+            assert check_widget_snapshot(widget_actual, __file__, 'test_slow_widget_ok', try_sec=3)
+            assert mock_sleep.call_count > 0
 
         def change_actual():
             widget_actual.setText('test123')
+            widget_actual.grab().save('slow_widget.png')
 
-        QTimer.singleShot(0, check_ok_before_elapse)
+        QTimer.singleShot(0, show)
+        QTimer.singleShot(10, create_ref)
+        QTimer.singleShot(20, check_ok_before_elapse)
         QTimer.singleShot(1000, change_actual)
         QTimer.singleShot(2100, qt_app.quit)
 
         qt_app.exec()
+        ref_image_path.unlink()
 
 
 class TestCaseImgDiffer:
