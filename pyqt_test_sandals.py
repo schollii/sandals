@@ -241,13 +241,23 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
 
     # it exists, so compare to it, return if identical:
     ref_pixmap = QPixmap(str(ref_pixmap_path))
+    ref_image = ref_pixmap.toImage()
     actual_pixmap = widget.grab()
     image = actual_pixmap.toImage()
-    ref_image = ref_pixmap.toImage()
+
+    if try_sec is not None:
+        start_time = perf_counter()
+        while ref_image != image and perf_counter() - start_time < try_sec:
+            qApp.processEvents()
+            sleep(try_interval)
+            actual_pixmap = widget.grab()
+            image = actual_pixmap.toImage()
+
     if ref_image == image:
         return True
 
     # not equal so get a diff image if diff is too large:
+    start_time = perf_counter()
     if img_differ is None:
         img_differ = ImgDiffer(**img_diff_kwargs)
     else:
@@ -255,15 +265,7 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
             msg = "Unknown kwargs {} (because img_differ was given rather than None)"
             raise ValueError(msg.format(img_diff_kwargs))
 
-    start_time = perf_counter()
     diff_image = img_differ.get_diff(image, ref_image)        
-    if try_sec is not None and diff_image is not None:
-        while diff_image is not None and perf_counter() - start_time < try_sec:
-            qApp.processEvents()
-            sleep(try_interval)
-            actual_pixmap = widget.grab()
-            image = actual_pixmap.toImage()
-            diff_image = img_differ.get_diff(image, ref_image)
     time_required = perf_counter() - start_time
 
     if log is not None:
