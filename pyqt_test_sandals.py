@@ -4,6 +4,7 @@
 Various testing utilities for PyQt. 
 """
 
+import re
 from pathlib import Path
 from math import sqrt
 from time import perf_counter, sleep
@@ -104,10 +105,13 @@ class ImgDiffer:
         
         for i in range(diff_width):
             for j in range(diff_height):
-                pixel = image.pixelColor(i, j)
-                ref_pixel = ref_image.pixelColor(i, j)
-                
-                if pixel.isValid() and ref_pixel.isValid():
+                actual_valid_coord = image.valid(i, j)
+                ref_valid_coord = ref_image.valid(i, j)
+
+                if actual_valid_coord and ref_valid_coord:
+                    pixel = image.pixelColor(i, j)
+                    ref_pixel = ref_image.pixelColor(i, j)
+
                     total_num_pixels += 1
                     if pixel == ref_pixel:
                         diff_image.setPixelColor(i, j, self.PIXEL_COLOR_NO_DIFF)
@@ -120,10 +124,12 @@ class ImgDiffer:
                             self.max_pix_diff = max_diff
                         diff_image.setPixelColor(i, j, QColor(*diff_color))
 
-                elif pixel.isValid():
+                elif actual_valid_coord:
+                    pixel = image.pixelColor(i, j)
                     diff_image.setPixelColor(i, j, pixel)
 
-                elif ref_pixel.isValid():
+                elif ref_valid_coord:
+                    ref_pixel = ref_image.pixelColor(i, j)
                     diff_image.setPixelColor(i, j, ref_pixel)
 
                 else:
@@ -151,9 +157,9 @@ class ImgDiffer:
         Returns a text string that describes the actual difference metrics computed by the last 
         get_diff(), as well as the tolerances that were used. 
         """
-        msg = "RMS diff={} (rms_tol_perc={}), number of pixels changed={} (num_tol_perc={})"
-        results = (self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc)
-        msg = msg.format(*['{}' if obj is None else '{:.2f}%' for obj in results])
+        msg = "RMS diff={%} (rms_tol_perc={%}), number of pixels changed={%} (num_tol_perc={%}), max pix diff={} (max_pix_diff_tol={})"
+        msg = re.sub('\{%\}', '{:.2f}%', msg)
+        results = (self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc, self.max_pix_diff, self.max_pix_diff_tol)
         return msg.format(*results)
 
     def _get_pixel_diff(self, pix_color: QColor, ref_pix_color: QColor) -> (float, (int, int, int, int)):
