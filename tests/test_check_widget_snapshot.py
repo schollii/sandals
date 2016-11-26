@@ -12,8 +12,8 @@ from PyQt5.QtGui import QColor, QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtWidgets import QHBoxLayout
 
-import pyqt_test_utils  # for patching
-from pyqt_test_utils import check_widget_snapshot, ImgDiffer
+import pyqt_test_sandals  # for patching
+from pyqt_test_sandals import check_widget_snapshot, ImgDiffer
 
 
 def non_existent_path(name: str):
@@ -213,7 +213,7 @@ class TestCaseChecker:
         widget = QLabel('test2')
         widget.setObjectName('label')
         mock_log = Mock()
-        mock_timer = mocker.patch.object(pyqt_test_utils, 'perf_counter', side_effect=[0, 123])
+        mock_timer = mocker.patch.object(pyqt_test_sandals, 'perf_counter', side_effect=[0, 123])
         assert check_widget_snapshot(widget, __file__, 'test_unequal_images_diff_less_than_tol',
                                      img_differ=ImgDiffer_SameWithinTol(), log=mock_log)
         ref_image_path.unlink()
@@ -247,7 +247,7 @@ class TestCaseChecker:
         widget.setObjectName('label')
         mock_log = Mock()
         files_before = set(Path(__file__).parent.glob('*'))
-        mock_timer = mocker.patch.object(pyqt_test_utils, 'perf_counter', side_effect=[0, 123])
+        mock_timer = mocker.patch.object(pyqt_test_sandals, 'perf_counter', side_effect=[0, 123])
         assert not check_widget_snapshot(widget, __file__, 'test_unequal_images',
                                          img_differ=ImgDiffer(), log=mock_log)
         assert mock_log.method_calls == [
@@ -293,7 +293,7 @@ class TestCaseChecker:
 
         img_differ_class = Mock()
         img_differ_class.return_value.get_diff.return_value = None
-        with patch.object(pyqt_test_utils, 'ImgDiffer', img_differ_class) as mock_default_differ:
+        with patch.object(pyqt_test_sandals, 'ImgDiffer', img_differ_class) as mock_default_differ:
             assert check_widget_snapshot(widget, __file__, 'test_custom_differ')
             assert mock_default_differ.call_args_list == [call()]
 
@@ -337,7 +337,7 @@ class TestCaseChecker:
             assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_ok')
 
         def check_ok_before_elapse():
-            mock_sleep = mocker.patch.object(pyqt_test_utils, 'sleep')
+            mock_sleep = mocker.patch.object(pyqt_test_sandals, 'sleep')
             assert check_widget_snapshot(widget_actual, __file__, 'test_slow_widget_ok', try_sec=3)
             assert mock_sleep.call_count > 0
 
@@ -363,6 +363,15 @@ class TestCaseImgDiffer:
         if self.app is None:
             self.app = QApplication([])
 
+        def except_hook(*args):
+            traceback.print_exception(*args)
+
+        prev_hook = sys.excepthook
+        sys.excepthook = except_hook
+
+        yield self.app
+        sys.excepthook = prev_hook
+
     def test_same_img(self):
         widget1 = QLabel('test1')
         widget2 = QLabel('test1')
@@ -372,7 +381,7 @@ class TestCaseImgDiffer:
 
         differ = ImgDiffer()
         assert differ.get_diff(img, ref_img) is None
-        expect = "RMS diff=0.00% (rms_tol_perc=0.00%), number of pixels changed=0.00% (num_tol_perc=None)"
+        expect = 'RMS diff=0.00% (rms_tol_perc=0.00%), number of pixels changed=0.00% (num_tol_perc=None), max pix diff=0 (max_pix_diff_tol=None)'
         assert differ.report() == expect
 
     def test_actual_wider(self):
@@ -470,7 +479,7 @@ class TestCaseImgDiffer:
             expect = QPixmap('same_size_img_neq.png')
             assert expect.toImage() == diff
             report = differ.report()
-            assert report == "RMS diff=37.22% (rms_tol_perc=0.00%), number of pixels changed=10.46% (num_tol_perc=None)"
+            assert report == "RMS diff=37.22% (rms_tol_perc=0.00%), number of pixels changed=10.46% (num_tol_perc=None), max pix diff=240 (max_pix_diff_tol=None)"
 
             self.app.closeAllWindows()
 
@@ -511,7 +520,7 @@ class TestCaseImgDiffer:
         assert differ.max_pix_diff == 106
         assert differ.diff_rms_perc == 100 * sqrt(pow(103, 2) + pow(104, 2) + pow(105, 2) + pow(106, 2)) / 2 / 255
         report = differ.report()
-        assert report == "RMS diff=40.98% (rms_tol_perc=0.00%), number of pixels changed=0.01% (num_tol_perc=None)"
+        assert report == "RMS diff=40.98% (rms_tol_perc=0.00%), number of pixels changed=0.01% (num_tol_perc=None), max pix diff=106 (max_pix_diff_tol=None)"
 
         # various cases that should produce no diff:
         assert ImgDiffer(rms_tol_perc=42).get_diff(actual_img, ref_img) is None
@@ -539,7 +548,7 @@ class TestCaseImgDiffer:
         assert differ.max_pix_diff == 2
         assert isclose(differ.diff_rms_perc, 100 * 2 / 255)
         report = differ.report()
-        assert report == "RMS diff=0.78% (rms_tol_perc=0.00%), number of pixels changed=100.00% (num_tol_perc=None)"
+        assert report == "RMS diff=0.78% (rms_tol_perc=0.00%), number of pixels changed=100.00% (num_tol_perc=None), max pix diff=2 (max_pix_diff_tol=None)"
 
         # various cases that should produce no diff:
         assert ImgDiffer(rms_tol_perc=1).get_diff(actual_img, ref_img) is None

@@ -164,10 +164,21 @@ class ImgDiffer:
         Returns a text string that describes the actual difference metrics computed by the last 
         get_diff(), as well as the tolerances that were used. 
         """
-        msg = "RMS diff={%} (rms_tol_perc={%}), number of pixels changed={%} (num_tol_perc={%}), max pix diff={} (max_pix_diff_tol={})"
-        msg = re.sub('\{%\}', '{:.2f}%', msg)
-        results = (self.diff_rms_perc, self.rms_tol_perc, self.num_diffs_perc, self.num_tol_perc, self.max_pix_diff, self.max_pix_diff_tol)
-        return msg.format(*results)
+        rms_msg = "RMS diff={obj.diff_rms_perc:.2f}% (rms_tol_perc="
+        if self.rms_tol_perc is None:
+            rms_msg += "None)"
+        else:
+            rms_msg += "{obj.rms_tol_perc:.2f}%)"
+
+        ntp_msg = "number of pixels changed={obj.num_diffs_perc:.2f}% (num_tol_perc="
+        if self.num_tol_perc is None:
+            ntp_msg += "None)"
+        else:
+            ntp_msg += "{obj.num_tol_perc:.2f}%)"
+
+        mpd_msg = "max pix diff={obj.max_pix_diff} (max_pix_diff_tol={obj.max_pix_diff_tol})"
+        full_msg = ', '.join([rms_msg, ntp_msg, mpd_msg]).format(obj=self)
+        return full_msg
 
     def _get_pixel_diff(self, pix_color: QColor, ref_pix_color: QColor) -> (float, (int, int, int, int)):
         """
