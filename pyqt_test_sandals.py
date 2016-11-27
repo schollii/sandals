@@ -314,3 +314,37 @@ def check_widget_snapshot(widget: QWidget, ref_path: str, fig_name: str, delete_
     diff_pixmap.save(str(diff_pix_path))
 
     return False
+
+
+def cleanup_check_files(ref_path: str=None, fig_name: str=None):
+    """
+    Delete temp files created by checker
+    :param ref_path: folder in which to cleanup; if None, current working directory
+    :param fig_name: remove only for given snapshot name; if None, all snapshots
+    """
+    if ref_path is None:
+        ref_path = Path.cwd()
+    else:
+        ref_path = Path(ref_path)
+        if ref_path.is_file():
+            ref_path = ref_path.parent
+
+    if fig_name:
+        ref_pixmap_path = ref_path / fig_name
+        actual_pix_path = ref_pixmap_path.with_name(fig_name + '_actual.png')
+        diff_pix_path = ref_pixmap_path.with_name(fig_name + '_diff.png')
+
+        if actual_pix_path.exists():
+            actual_pix_path.unlink()
+        if diff_pix_path.exists():
+            diff_pix_path.unlink()
+
+    else:
+        recurse = False
+        removing = []
+        fig_names = ref_path.glob('**/*.png' if recurse else '*.png')
+        for fig_name in fig_names:
+            if fig_name.name.endswith('_diff.png') or fig_name.name.endswith('_actual.png'):
+                if fig_name.with_name(fig_name.name.replace('_diff.png', '.png')).exists():
+                    removing.append(fig_name)
+                    fig_name.unlink()

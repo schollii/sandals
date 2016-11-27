@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtWidgets import QHBoxLayout
 
 import pyqt_test_sandals  # for patching
-from pyqt_test_sandals import check_widget_snapshot, ImgDiffer
+from pyqt_test_sandals import check_widget_snapshot, ImgDiffer, cleanup_check_files
 
 
 def non_existent_path(name: str):
@@ -137,7 +137,7 @@ class TestCaseChecker:
 
         assert ref_image_path.exists()
         assert log.info.call_args == call('Generating ref snapshot %s in %s for widget %s',
-                                          'test_ref_folder_instead_of_file.png',
+                                          ref_image_path.name,
                                           folder, widget)
         expected_log = 'Generating ref snapshot test_ref_folder_instead_of_file.png in +++\\tests for widget ***'
         check_log_format(log.info.call_args, expected_log)
@@ -151,9 +151,9 @@ class TestCaseChecker:
         ref_image_path = non_existent_path('test2_old_results.png')
 
         # create two bogus files that pretend to be previous results:
-        actual_img_path = Path('test2_old_results_actual.png')
+        actual_img_path = Path(ref_image_path.stem + '_actual.png')
         actual_img_path.write_text('')
-        diff_img_path = Path('test2_old_results_diff.png')
+        diff_img_path = Path(ref_image_path.stem + '_diff.png')
         diff_img_path.write_text('')
         assert actual_img_path.exists()
         assert diff_img_path.exists()
@@ -161,7 +161,7 @@ class TestCaseChecker:
         # check widget snapshot, with delete-old = False, verify results files still there:
         files_before = set(Path(__file__).parent.glob('*'))
         widget = QLabel('test')
-        assert check_widget_snapshot(widget, __file__, 'test2_old_results', delete_old_results=False)
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem, delete_old_results=False)
         ref_image_path.unlink()
         assert actual_img_path.exists()
         assert diff_img_path.exists()
@@ -171,7 +171,7 @@ class TestCaseChecker:
         # check it again, this time results removed:
         actual_img_path_str = actual_img_path.resolve()
         diff_img_path_str = diff_img_path.resolve()
-        assert check_widget_snapshot(widget, __file__, 'test2_old_results')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
         ref_image_path.unlink()
         assert not actual_img_path.exists()
         assert not diff_img_path.exists()
@@ -185,11 +185,11 @@ class TestCaseChecker:
         # generate reference:
         files_before = set(Path(__file__).parent.glob('*'))
         widget = QLabel('test')
-        assert check_widget_snapshot(widget, __file__, 'test_equal_images')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
 
         # re-check: should find images are identical:
-        assert check_widget_snapshot(widget, __file__, 'test_equal_images')
-        assert check_widget_snapshot(widget, __file__, 'test_equal_images')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
         ref_image_path.unlink()
         files_after = set(Path(__file__).parent.glob('*'))
         assert files_before == files_after
@@ -207,19 +207,19 @@ class TestCaseChecker:
         # generate reference:
         files_before = set(Path(__file__).parent.glob('*'))
         widget = QLabel('test')
-        assert check_widget_snapshot(widget, __file__, 'test_unequal_images_diff_less_than_tol')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
 
         # pretend label has changed, but less than tolerance (get_diff() returns None):
         widget = QLabel('test2')
         widget.setObjectName('label')
         mock_log = Mock()
         mock_timer = mocker.patch.object(pyqt_test_sandals, 'perf_counter', side_effect=[0, 123])
-        assert check_widget_snapshot(widget, __file__, 'test_unequal_images_diff_less_than_tol',
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem,
                                      img_differ=ImgDiffer_SameWithinTol(), log=mock_log)
         ref_image_path.unlink()
         assert mock_log.info.mock_calls == [
             call('Widget %s vs ref %s in %s (%.2f sec):',
-                 'label', 'test_unequal_images_diff_less_than_tol.png', ref_image_path.parent.resolve(), 123),
+                 'label', ref_image_path.name, ref_image_path.parent.resolve(), 123),
             call('    report')
         ]
         expect = 'Widget label vs ref test_unequal_images_diff_less_than_tol.png in +++\\tests (123.00 sec):'
@@ -240,7 +240,7 @@ class TestCaseChecker:
 
         # generate reference:
         widget = QLabel('test')
-        assert check_widget_snapshot(widget, __file__, 'test_unequal_images')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
 
         # pretend label has changed, but less than tolerance (get_diff() returns None):
         widget = QLabel('test2')
@@ -248,10 +248,10 @@ class TestCaseChecker:
         mock_log = Mock()
         files_before = set(Path(__file__).parent.glob('*'))
         mock_timer = mocker.patch.object(pyqt_test_sandals, 'perf_counter', side_effect=[0, 123])
-        assert not check_widget_snapshot(widget, __file__, 'test_unequal_images',
+        assert not check_widget_snapshot(widget, __file__, ref_image_path.stem,
                                          img_differ=ImgDiffer(), log=mock_log)
         assert mock_log.method_calls == [
-            call.info('Widget %s vs ref %s in %s (%.2f sec):', 'label', 'test_unequal_images.png',
+            call.info('Widget %s vs ref %s in %s (%.2f sec):', 'label', ref_image_path.name,
                       ref_image_path.parent.resolve(), 123),
             call.info('    report'),
             call.warn('    Snapshot has changed beyond tolerances, saving actual and diff images to folder %s:',
@@ -275,7 +275,7 @@ class TestCaseChecker:
 
         # generate reference:
         widget = QLabel('test')
-        assert check_widget_snapshot(widget, __file__, 'test_custom_differ')
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
 
         # pretend label has changed, but less than tolerance (get_diff() returns None):
         widget = QLabel('test2')
@@ -285,16 +285,16 @@ class TestCaseChecker:
         img_differ = Mock()
         img_differ.get_diff.return_value = None
         pytest.raises(ValueError,
-                      check_widget_snapshot, widget, __file__, 'test_custom_differ',
+                      check_widget_snapshot, widget, __file__, ref_image_path.stem,
                       img_differ=img_differ, kwarg1=1, kwarg2=2)
-        assert check_widget_snapshot(widget, __file__, 'test_custom_differ', img_differ=img_differ)
+        assert check_widget_snapshot(widget, __file__, ref_image_path.stem, img_differ=img_differ)
         assert len(img_differ.method_calls) == 1
         assert img_differ.get_diff.call_count == 1
 
         img_differ_class = Mock()
         img_differ_class.return_value.get_diff.return_value = None
         with patch.object(pyqt_test_sandals, 'ImgDiffer', img_differ_class) as mock_default_differ:
-            assert check_widget_snapshot(widget, __file__, 'test_custom_differ')
+            assert check_widget_snapshot(widget, __file__, ref_image_path.stem)
             assert mock_default_differ.call_args_list == [call()]
 
         ref_image_path.unlink()
@@ -304,10 +304,10 @@ class TestCaseChecker:
         widget_ref = QLabel('test')
 
         widget_actual = QLabel('test2')
-        assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_elapses')
+        assert check_widget_snapshot(widget_ref, __file__, ref_image_path.stem)
 
         def check_fails_on_elapse():
-            assert not check_widget_snapshot(widget_actual, __file__, 'test_slow_widget_elapses', try_sec=1)
+            assert not check_widget_snapshot(widget_actual, __file__, ref_image_path.stem, try_sec=1)
 
         def change_actual():
             widget_actual.setText('test')
@@ -317,6 +317,7 @@ class TestCaseChecker:
         QTimer.singleShot(1100, qt_app.quit)
 
         qt_app.exec()
+        cleanup_check_files(fig_name=ref_image_path.stem)
         ref_image_path.unlink()
 
     def test_slow_widget_ok(self, qt_app, mocker):
@@ -333,11 +334,11 @@ class TestCaseChecker:
             widget_actual.show()
 
         def create_ref():
-            assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_ok')
+            assert check_widget_snapshot(widget_ref, __file__, ref_image_path.stem)
 
         def check_ok_before_elapse():
             mock_sleep = mocker.patch.object(pyqt_test_sandals, 'sleep')
-            assert check_widget_snapshot(widget_actual, __file__, 'test_slow_widget_ok', try_sec=3)
+            assert check_widget_snapshot(widget_actual, __file__, ref_image_path.stem, try_sec=3)
             assert mock_sleep.call_count > 0
 
         def change_actual():
