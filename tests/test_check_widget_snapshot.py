@@ -333,7 +333,6 @@ class TestCaseChecker:
             widget_actual.show()
 
         def create_ref():
-            widget_ref.grab().save('slow_widget_ref.png')
             assert check_widget_snapshot(widget_ref, __file__, 'test_slow_widget_ok')
 
         def check_ok_before_elapse():
@@ -343,7 +342,6 @@ class TestCaseChecker:
 
         def change_actual():
             widget_actual.setText('test123')
-            widget_actual.grab().save('slow_widget.png')
 
         QTimer.singleShot(0, show)
         QTimer.singleShot(10, create_ref)
