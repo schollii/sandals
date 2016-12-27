@@ -10,7 +10,7 @@
 # Copyright (c) Oliver Schoenborn
 
 """
-Various testing utilities for PyQt. 
+Various testing utilities for PyQt-based components.
 """
 
 import re
