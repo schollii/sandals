@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name='sandals',
+    name='pysandals',
     version='0.1',
     packages=[''],
     url='https://github.com/schollii/sandals',
