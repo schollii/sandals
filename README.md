@@ -13,3 +13,6 @@ Results are discussed in a [CodeProject article](http://www.codeproject.com/Arti
 
 Utility components to check whether a widget looks identical or similar within tolerance to an existing snapshot of it. 
 Discussed in [CodeProject article](http://www.codeproject.com/Tips/1134902/Testing-QWidget-Snapshot-Regression-in-PyQt).
+
+## Test commiting into PR
+This is a dummy change to trigger a PR.
