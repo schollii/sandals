@@ -166,21 +166,20 @@ class ImgDiffer:
         Returns a text string that describes the actual difference metrics computed by the last 
         get_diff(), as well as the tolerances that were used. 
         """
-        rms_msg = "RMS diff={obj.diff_rms_perc:.2f}% (rms_tol_perc="
-        if self.rms_tol_perc is None:
-            rms_msg += "None)"
-        else:
-            rms_msg += "{obj.rms_tol_perc:.2f}%)"
-
-        ntp_msg = "number of pixels changed={obj.num_diffs_perc:.2f}% (num_tol_perc="
-        if self.num_tol_perc is None:
-            ntp_msg += "None)"
-        else:
-            ntp_msg += "{obj.num_tol_perc:.2f}%)"
-
-        mpd_msg = "max pix diff={obj.max_pix_diff} (max_pix_diff_tol={obj.max_pix_diff_tol})"
-        full_msg = ', '.join([rms_msg, ntp_msg, mpd_msg]).format(obj=self)
-        return full_msg
+        msg = "RMS diff={0.diff_rms_perc} (rms_tol_perc={0.rms_tol_perc}), number of pixels changed={0.num_diffs_perc} "
+              "(num_tol_perc={0.num_tol_perc}), max pix diff={0.max_pix_diff} (max_pix_diff_tol={0.max_pix_diff_tol})"
+        
+        # for fields that are floating point values, add a precision so don't get too much noise:
+        def repl(match):
+            attr_name = match.group(1)
+            if isinstance(getattr(self, attr_name), float):
+                return '{0.' + attr_name + ':.2f}'
+            else:
+                return match.group(0)
+            
+        msg = re.sub(r'\{0\.(\w+)\}', repl, msg)
+        
+        return msg.format(self)
 
     def _get_pixel_diff(self, pix_color: QColor, ref_pix_color: QColor) -> (float, (int, int, int, int)):
         """
