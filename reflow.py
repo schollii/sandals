@@ -11,14 +11,6 @@ def is_blank_line(line) -> bool:
     return line.strip() == ''
 
 
-def split_line_indent(line):
-    m = re.match('( +)(.*)', line)
-    if m is None: 
-        return '', line
-    else:
-        return m[1], m[2]
-
-
 def reflow_list_item(group, into_group, width, list_prefix):
     # to dedent list item, need blank + list prefix:
     first_line = group[0]
