@@ -27,6 +27,7 @@ Python module.
 from pathlib import Path
 from typing import Union, Dict, List, Any
 import json
+import hashlib
 
 JsonType = Union[str, int, float, List['JsonType'], 'JsonTree']
 JsonTree = Dict[str, JsonType]
