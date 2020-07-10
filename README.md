@@ -7,6 +7,10 @@ When you need to compare two JSON data structures without caring about order of 
 or just get a hash that will not change as long as the data structure doesn't semantically vary, 
 check out the json_sem_hash.py module. 
 
+## Helm chart utilities
+
+Various, see the docs in the helm.py file. 
+
 ## PyQt 5 signal/slot connections performance
 
 The PyQt5 website indicates that using `@pyqtSlot(...)` decreases the amount
