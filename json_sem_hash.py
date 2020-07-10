@@ -16,6 +16,10 @@ for both d3 and d4.
 If you find that `get_json_sem_hash()` doesn't return the same hash for 2 json structures 
 that *you* think are in fact "semantically equivalent", please raise an issue!
 
+The idea for this approach was inspired by https://github.com/fraunhoferfokus/JSum. It 
+probably needs Python 3.5+ due to type hinting. Clearly the type hinting is not essential, 
+so if it's presence is a hindrance for lots of people, please raise an issue. 
+
 (C) Oliver Schoenborn
 License: modified MIT, ie MIT plus the following restriction: This code 
 can be included in your code base only as the complete file, and this 
