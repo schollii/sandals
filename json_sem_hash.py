@@ -17,11 +17,12 @@ If you find that `get_json_sem_hash()` doesn't return the same hash for 2 json s
 that *you* think are in fact "semantically equivalent", please raise an issue!
 
 (C) Oliver Schoenborn
-License: modified MIT, ie MIT plus the following restriction: This code can be 
-included in your code base only as the complete file, and this license comment cannot
-be removed or changed. Instead, if you find modifications necessary, please contribute
-a PR so that the community benefits the same way you benefit from this open-source
-Python module. 
+License: modified MIT, ie MIT plus the following restriction: This code 
+can be included in your code base only as the complete file, and this 
+license comment cannot be removed or changed. This code was taken from 
+https://github.com/schollii/sandals/blob/master/json_sem_hash.py. If you 
+find modifications necessary, please contribute a PR so that the open-source
+community can benefit the same way you benefit from this file.
 """
 
 from pathlib import Path
