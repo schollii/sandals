@@ -29,9 +29,7 @@ find modifications necessary, please contribute a PR so that the open-source
 community can benefit the same way you benefit from this file.
 """
 
-from pathlib import Path
-from typing import Union, Dict, List, Any
-import json
+from typing import Union, Dict, List
 import hashlib
 
 JsonType = Union[str, int, float, List['JsonType'], 'JsonTree']
