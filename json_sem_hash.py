@@ -18,7 +18,10 @@ that *you* think are in fact "semantically equivalent", please raise an issue!
 
 (C) Oliver Schoenborn
 License: modified MIT, ie MIT plus the following restriction: This code can be 
-included in your code base as the complete file only. 
+included in your code base only as the complete file, and this license comment cannot
+be removed or changed. Instead, if you find modifications necessary, please contribute
+a PR so that the community benefits the same way you benefit from this open-source
+Python module. 
 """
 
 from pathlib import Path
