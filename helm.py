@@ -1,6 +1,6 @@
 """
 Provides some helper functions for helm. In particular, creation and installation
-of a chart where app version is derived from a hash of the final set of values used 
+of a chart where app version is derived from a hash of the final set of values used
 for installation (all values files, all sets, and the default values file of the chart).
 
 Requirements:
@@ -82,21 +82,30 @@ def get_proc_out(cmd: Union[str, List[str]]) -> str:
 
 
 def get_helm_install_merged_values_hash(
-        service_name: str, namespace: str, *xtra_helm_args: str,
-        values_files: List[str] = None, sets: List[str] = None,
-        chart_dir_path: str = None, with_secrets: bool = True) -> Tuple[str, JsonTree]:
+    release_name: str, namespace: str, *xtra_helm_args: str,
+    values_files: List[str] = None, sets: List[str] = None,
+    chart_dir_path: str = None, with_secrets: bool = True
+) -> Tuple[str, JsonTree]:
     """
-    Get a hash represents the merged values from a helm install command for a
-    given service name, values files, sets, addition helm args, into a
-    specific namespace. The chart path should be the relative or absolute
-    path to the folder containing the Chart.yaml. The namespace is needed
-    because we don't know whether a dry-run (used to compute the hash) uses it.
+    Get a hash representing the merged values from a helm install command:
 
-    Returns a pair: the first item is the hash value, the second is a dict
-    representing the
+    - release_name: helm install release name
+    - namespace: namespace that installation (will) target
+    - chart_dir_path: path to helm chart folder (folder containing the Chart.yaml)
+    - with_secrets: use the secrets plugin
+    - values_files: list of paths to values files
+    - sets: list of set pairs eg ['a=b', 'c=d']
+    - xtra_helm_args: additional args to give to helm
+
+    This uses a helm install dry-run. The namespace is needed the dry-run (used
+    to compute the hash) uses it.
+
+    Returns a pair: the first item is the hash value computed, the second is a dict
+    representing the merged values (merge of all values files, decrypted secrets,
+    sets, and values from the chart's default values.yaml).
     """
     dry_run_cmd = _get_install_cmd(
-        service_name, namespace, chart_dir_path, with_secrets, values_files, sets,
+        release_name, namespace, chart_dir_path, with_secrets, values_files, sets,
         xtra_helm_args, dry_run=True)
     merged_values = json.loads(get_proc_out(dry_run_cmd))['config']
     config_hash = get_json_sem_hash(merged_values, hasher=hashlib.md5)
@@ -120,23 +129,29 @@ def format_hash(hash_str: str, hash_len: int, hash_seg_len: int, hash_sep: str) 
 
 
 def install_hashed_chart(
-    service_name: str, build_tag: str, namespace: str, *xtra_helm_args,
+    service_name: str, build_tag: str, namespace: str, *xtra_helm_args: str,
     release_name: str = None, with_secrets: bool = None,
     values_files: List[str] = None, sets: List[str] = None,
     chart_dir_path: str = None, chart_prefix: str = '',
     hash_len: int = 12, hash_seg_len: int = 4, hash_sep: str = '.',
-):
+) -> Tuple[str, JsonTree]:
     """
-    Create a hashed chart from given path, for the given service, build tag, values
-    files, and sets, assumed for installation in given namespace. The chart path is
-    path to the folder containing the Chart.yaml. By default, this is 
-    chart/{chart_prefix}{service_name}. The release_name will default to the
-    service name unless specified.
+    Install a helm chart into specified namespace of current kubectl context.
 
-    The return value is a triplet, identifying the packaged chart's full name,
-    (which will start with chart prefix), chart version string (contained in
-    full name), and the full hash of the values used for (prior or to be done)
-    installation.
+    - service_name: name of app/service (basis for chart name)
+    - build_tag: an identifier representing the chart's source
+    - namespace: namespace that installation (will) target
+    - release_name: helm install release name (defaults to service name if not given)
+    - chart_dir_path: path to helm chart folder (folder containing the Chart.yaml);
+      By default, this is chart/{chart_prefix}{service_name}.
+    - chart_prefix: prepended to the service name to form the chart name
+    - with_secrets: if None, will use the secrets plugin if it is installed
+    - values_files: list of paths to values files (including encrypted secrets files)
+    - sets: list of set pairs eg ['a=b', 'c=d']
+    - xtra_helm_args: additional args to give to helm
+    - hash_len, hash_seg_len, hash_sep: length of hash, hash segments, and segment separator
+
+    The return value is a pair: the full hash of the values used, and the merged values dict.
     """
     if not chart_dir_path:
         chart_dir_path = f'chart/{chart_prefix}{service_name}'
@@ -174,3 +189,5 @@ def install_hashed_chart(
             xtra_helm_args)
         print(' '.join(install_cmd))
         run(install_cmd)
+
+    return values_hash, merged_values
