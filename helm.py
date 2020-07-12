@@ -161,7 +161,7 @@ def install_hashed_chart(
         print('Release name:', release_name)
     if with_secrets is None:
         # default is: if we have it, use it!
-        with_secrets = (run('helm secrets 2>1 > /dev/null', shell=True).returncode == 0)
+        with_secrets = (run('helm secrets 2>/dev/null', shell=True).returncode == 0)
         print('Use secrets:', with_secrets)
 
     values_hash, merged_values = get_helm_install_merged_values_hash(
