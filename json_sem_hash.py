@@ -27,6 +27,7 @@ license comment cannot be removed or changed. This code was taken from
 https://github.com/schollii/sandals/blob/master/json_sem_hash.py. If you 
 find modifications necessary, please contribute a PR so that the open-source
 community can benefit the same way you benefit from this file.
+GIT_COMMIT: <REPLACE WHEN FILE COPIED FROM GITHUB>
 """
 
 from typing import Union, Dict, List
