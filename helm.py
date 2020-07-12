@@ -1,13 +1,7 @@
 """
 Provides some helper functions for helm. In particular, creation and installation
-of a hashed chart package, ie the chart version of the package reflects both the chart
-source, and the final set of values used for installation. This is the combination
-of a build tag that represents the chart source, and an md5 hash that represents the
-merged values (all values files, all sets, and the default values file of the chart).
-Moreover, the package's values.yaml is the final set of merged values. Therefore the
-final chart package is completely standalone: it contains all the merged
-values, and the Chart.yaml has the chart version computed. It can be installed
-repeatedly without any values files.
+of a chart where app version is derived from a hash of the final set of values used 
+for installation (all values files, all sets, and the default values file of the chart).
 
 Requirements:
 - Python 3.5+
