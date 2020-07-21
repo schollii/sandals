@@ -71,13 +71,15 @@ def _get_install_cmd(
     return dry_run_cmd
 
 
-def get_proc_out(cmd: Union[str, List[str]]) -> str:
+def get_proc_out(cmd: Union[str, List[str]], **kwargs) -> str:
     """
     Run the given command through subprocess.run() and return the
-    output as a string.
+    output as a string. The cmd can be either a string (in which case
+    the command is run with shell=True) or a list of strings (shell=False).
+    The kwargs are given to subprocess.run() as-is.
     """
     shell = type(cmd) is str
-    proc = run(cmd, shell=shell, stdout=PIPE)
+    proc = run(cmd, shell=shell, stdout=PIPE, **kwargs)
     return proc.stdout.decode('UTF-8').strip()
 
 
