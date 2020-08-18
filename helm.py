@@ -79,7 +79,7 @@ def get_proc_out(cmd: Union[str, List[str]], **kwargs) -> str:
     The kwargs are given to subprocess.run() as-is.
     """
     shell = type(cmd) is str
-    proc = run(cmd, shell=shell, stdout=PIPE, **kwargs)
+    proc = run(cmd, shell=shell, stdout=PIPE, check=True, **kwargs)
     return proc.stdout.decode('UTF-8').strip()
 
 
