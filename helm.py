@@ -15,7 +15,7 @@ license comment cannot be removed or changed. This code was taken from
 https://github.com/schollii/sandals/blob/master/helm.py.
 GIT_COMMIT: <REPLACE WHEN FILE COPIED FROM GITHUB>
 
-If you find modifications necessary, please contribute a PR so that the 
+If you find modifications necessary, please contribute a PR so that the
 open-source community can benefit the same way you benefit from this file.
 """
 
@@ -38,7 +38,7 @@ def _get_install_cmd(
     values_files: List[str], sets: List[str], xtra_helm_args: Tuple[str],
     dry_run: bool = False
 ) -> List[str]:
-    dry_run_cmd = [
+    run_cmd = [
         'helm',
         'upgrade',
         '--install',
@@ -49,26 +49,26 @@ def _get_install_cmd(
     ]
 
     if dry_run:
-        dry_run_cmd.extend([
+        run_cmd.extend([
             '--dry-run',
             '--output',
             'json',
         ])
 
     if with_secrets:
-        dry_run_cmd.insert(1, 'secrets')
+        run_cmd.insert(1, 'secrets')
 
     if values_files:
         for vf in values_files:
-            dry_run_cmd.append('-f')
-            dry_run_cmd.append(vf)
+            run_cmd.append('-f')
+            run_cmd.append(vf)
     if sets:
         for s in sets:
-            dry_run_cmd.append('--set')
-            dry_run_cmd.append(s)
+            run_cmd.append('--set')
+            run_cmd.append(s)
 
-    dry_run_cmd.extend(xtra_helm_args)
-    return dry_run_cmd
+    run_cmd.extend(xtra_helm_args)
+    return run_cmd
 
 
 def get_proc_out(cmd: Union[str, List[str]], **kwargs) -> str:
@@ -136,7 +136,7 @@ def install_hashed_chart(
     values_files: List[str] = None, sets: List[str] = None,
     chart_dir_path: str = None, chart_prefix: str = '',
     hash_len: int = 12, hash_seg_len: int = 4, hash_sep: str = '.',
-) -> Tuple[str, JsonTree]:
+) -> Tuple[str, JsonTree, int]:
     """
     Install a helm chart into specified namespace of current kubectl context.
 
@@ -153,7 +153,8 @@ def install_hashed_chart(
     - xtra_helm_args: additional args to give to helm
     - hash_len, hash_seg_len, hash_sep: length of hash, hash segments, and segment separator
 
-    The return value is a pair: the full hash of the values used, and the merged values dict.
+    The return value is a triplet: the full hash of the values used, the merged values dict,
+    and the status code for helm run.
     """
     if not chart_dir_path:
         chart_dir_path = f'chart/{chart_prefix}{service_name}'
@@ -179,7 +180,6 @@ def install_hashed_chart(
         print(f'Installing from tmp chart folder {tmpdirname}')
         tmp_chart_path = Path(tmpdirname, Path(chart_dir_path).name)
         shutil.copytree(chart_dir_path, tmp_chart_path)
-        # run(f'ls -R {tmpdirname}', shell=True)
         chart_yaml_path = Path(tmp_chart_path, 'Chart.yaml')
         chart_info = yaml.safe_load(chart_yaml_path.read_text())
         chart_info['version'] = build_tag
@@ -190,6 +190,6 @@ def install_hashed_chart(
             release_name, namespace, str(tmp_chart_path), with_secrets, values_files, sets,
             xtra_helm_args)
         print(' '.join(install_cmd))
-        run(install_cmd)
+        exit_code = run(install_cmd).returncode
 
-    return values_hash, merged_values
+    return values_hash, merged_values, exit_code
