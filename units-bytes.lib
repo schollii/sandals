@@ -1,0 +1,27 @@
+# save this file to ~/.units-bytes.lib
+# it is used by convu command in convert_units.sh
+
+bit                     !h!
+
+nibble                  4 bit
+nybble                  nibble
+byte                    8 bit
+word                    2 byte
+block                   512 byte
+kbyte                   1024 byte
+megabyte                1024 kbyte
+gigabyte                1024 megabyte
+terabyte                1024 gigabyte
+petabyte                1024 terabyte
+exabyte                 1024 petabyte
+zettabyte               1024 exabyte
+yottabyte               1024 zettabyte
+kilobyte                kbyte
+meg                     megabyte
+
+b                       byte
+mb                      megabyte
+gb                      gigabyte
+kb                      kilobyte
+
+baud                    bit/sec
