@@ -1,0 +1,55 @@
+#!/usr/bin/env /bin/bash 
+
+set -e
+
+set_from_var_if_unset() {
+  # Set the value of var named $1 to the value of var named $2 iff var named $1 does 
+  # not exist. Echo some useful info. If $2 is not given, "DEFAULT_$1" will be used. 
+  # (NOTE: we do NOT set value of $1 if $1 value is "", so that caller can use empty 
+  # value for var named $1).
+  # 
+  # Examples: 
+  # - "set_from_var_if_unset VAR1" will set VAR1 to the value of var DEFAULT_VAR1 
+  #   *only* if VAR1 does not exist; if VAR1 has value "" or something else, it is 
+  #   not changed.
+  # - "set_from_var_if_unset VAR1 VAR2" will set VAR1 to the value of VAR2 under same
+  #   conditions as other examples
+  # 
+  # WARNING: both args are used in an "eval" so this is not safe to use unless you 
+  #          trust where $1 and $2 come from
+
+  VAR_NAME="$1"
+  DEF_VAR_NAME="${2-DEFAULT_$VAR_NAME}"
+
+  if [[ "${!VAR_NAME-unset}" == "unset" ]]; then
+    eval "$VAR_NAME=\"${!DEF_VAR_NAME}\""
+    echo "WARNING: Using default value for $VAR_NAME"
+  fi
+  echo "$VAR_NAME: ${!VAR_NAME}"
+}
+
+
+set_from_value_if_unset() {
+  # Set the value of var named $1 to the given value iff var named $1 does 
+  # not exist. Echo some useful info.
+  # (NOTE: we do NOT set value of $1 if $1 value is "", so that caller can use empty 
+  # value for var named $1).
+  # 
+  # Examples: 
+  # - "set_from_value_if_unset VAR1 value1" will set VAR1 to the value of value1 only 
+  #   if VAR1 does not exist; if VAR1 has value "" or something else, it is not changed.
+  # 
+  # WARNING: both args are used in an "eval" so this is not safe to use unless you 
+  #          trust where $1 and $2 come from
+
+  VAR_NAME="$1"
+  VAR_VALUE="$2"
+
+  if [[ "${!VAR_NAME-unset}" == "unset" ]]; then
+    eval "$VAR_NAME=\"${!VAR_VALUE}\""
+    echo "WARNING: Using default value for $VAR_NAME"
+  fi
+  echo "$VAR_NAME: ${!VAR_NAME}"
+}
+
+
